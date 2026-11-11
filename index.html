@@ -3,962 +3,190 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AdTech POS - Cafetería</title>
-    <!-- React & ReactDOM CDN -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <!-- Babel standalone for JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        brand: {
-                            light: '#38bdf8',
-                            DEFAULT: '#0284c7',
-                            dark: '#0369a1',
-                        }
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        @media print {
-            body * { visibility: hidden; }
-            #printable-receipt, #printable-receipt * { visibility: visible; }
-            #printable-receipt { position: absolute; left: 0; top: 0; width: 100%; }
-        }
-    </style>
+    <title>Jacko Multiservice - Sistema de Facturación y POS</title>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
-<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors duration-200">
-    <div id="root"></div>
+<body>
+    <div class="app-container">
+        <!-- Sidebar de Navegación -->
+        <aside class="sidebar">
+            <div class="brand">
+                <h2>🛠️ Jacko Multiservice</h2>
+                <p>Sistema POS & Gestión</p>
+            </div>
+            <nav class="nav-menu">
+                <a href="#pos" class="nav-link active" onclick="switchTab('pos')">💳 Facturación (POS)</a>
+                <a href="#menu" class="nav-link" onclick="switchTab('menu')">🍽️ Menú del Día</a>
+                <a href="#productos" class="nav-link" onclick="switchTab('productos')">📦 Productos & Inventario</a>
+                <a href="#clientes" class="nav-link" onclick="switchTab('clientes')">👥 Clientes & RNC (DGII)</a>
+                <a href="#config" class="nav-link" onclick="switchTab('config')">⚙️ Configuración</a>
+            </nav>
+        </aside>
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-
-        // Base de Datos Simula DGII
-        const padronDGII = [
-            { rnc: '101010101', nombre: 'JUAN PEREZ SOLUCIONES SRL', tipo: 'RNC' },
-            { rnc: '00112345678', nombre: 'CARLOS GOMEZ', tipo: 'CEDULA' },
-            { rnc: '130999888', nombre: 'INVERSIONES ADTECH SRL', tipo: 'RNC' }
-        ];
-
-        // Componentes de Iconos auxiliares
-        const Icon = ({ name, size = 18, className = "" }) => {
-            useEffect(() => {
-                if (window.lucide) {
-                    window.lucide.createIcons();
-                }
-            }, [name]);
-            return <i data-lucide={name} style={{ width: size, height: size }} className={`inline-block ${className}`}></i>;
-        };
-
-        function App() {
-            // Estados de Configuración y Tema
-            const [theme, setTheme] = useState(localStorage.getItem('adtech_theme') || 'light');
-            const [activeTab, setActiveTab] = useState('pos');
-            const [itbisRate, setItbisRate] = useState(18);
-
-            // Productos e Inventario
-            const [products, setProducts] = useState(() => {
-                const saved = localStorage.getItem('adtech_products');
-                return saved ? JSON.parse(saved) : [
-                    { id: '1', nombre: 'Coca-Cola', costo: 25, venta: 35, categoria: 'Refrescos', disponible: true, img: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=300' },
-                    { id: '2', nombre: 'Plato del Día', costo: 120, venta: 200, categoria: 'Platos', esPlatoDia: true, disponible: true, img: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300' },
-                    { id: '3', nombre: 'Jugo Natural Chinola', costo: 30, venta: 60, categoria: 'Bebidas', disponible: true, img: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=300' },
-                    { id: '4', nombre: 'Tres Leches', costo: 50, venta: 100, categoria: 'Postres', disponible: true, img: 'https://images.unsplash.com/photo-1587314168485-3236d6710814?w=300' }
-                ];
-            });
-
-            // Clientes y Proveedores
-            const [clients, setClients] = useState(() => {
-                const saved = localStorage.getItem('adtech_clients');
-                return saved ? JSON.parse(saved) : [
-                    { id: '1', nombre: 'Consumidor Final', rnc: '', cxc: 0 },
-                    { id: '2', nombre: 'Empresa ABC SRL', rnc: '101010101', cxc: 450 }
-                ];
-            });
-
-            const [suppliers, setSuppliers] = useState(() => {
-                const saved = localStorage.getItem('adtech_suppliers');
-                return saved ? JSON.parse(saved) : [
-                    { id: '1', nombre: 'Distribuidora Corripio', rnc: '101888777', cxp: 1200 }
-                ];
-            });
-
-            // Carrito y Facturación
-            const [cart, setCart] = useState([]);
-            const [selectedClient, setSelectedClient] = useState('1');
-            const [paymentMethod, setPaymentMethod] = useState('Efectivo');
-            const [ncfType, setNcfType] = useState('B02');
-            const [discount, setDiscount] = useState(0);
-
-            // Modales
-            const [showPlatoModal, setShowPlatoModal] = useState(false);
-            const [platoConfig, setPlatoConfig] = useState({
-                principal: 'Arroz blanco',
-                carne: 'Pollo frito',
-                ensalada: 'Verde',
-                extra: 'Plátano frito',
-                precio: 200
-            });
-
-            const [showReceipt, setShowReceipt] = useState(false);
-            const [lastInvoice, setLastInvoice] = useState(null);
-
-            // Modales de Administración
-            const [showClientModal, setShowClientModal] = useState(false);
-            const [newClient, setNewClient] = useState({ nombre: '', rnc: '' });
-            const [showSupplierModal, setShowSupplierModal] = useState(false);
-            const [newSupplier, setNewSupplier] = useState({ nombre: '', rnc: '' });
-            const [showProductModal, setShowProductModal] = useState(false);
-            const [newProduct, setNewProduct] = useState({ nombre: '', costo: 0, venta: 0, categoria: 'Refrescos', img: '' });
-
-            // Persistencia
-            useEffect(() => {
-                document.documentElement.classList.toggle('dark', theme === 'dark');
-                localStorage.setItem('adtech_theme', theme);
-            }, [theme]);
-
-            useEffect(() => {
-                localStorage.setItem('adtech_products', JSON.stringify(products));
-            }, [products]);
-
-            useEffect(() => {
-                localStorage.setItem('adtech_clients', JSON.stringify(clients));
-            }, [clients]);
-
-            // Lógica Plato del Día
-            const isLocrio = platoConfig.principal.toLowerCase().includes('locrio');
-
-            const handleAddPlatoDia = () => {
-                const desc = `Plato del Día: ${platoConfig.principal}${isLocrio ? '' : ', ' + platoConfig.carne}, Ensalada ${platoConfig.ensalada}, Extra ${platoConfig.extra}`;
-                const item = {
-                    id: 'plato-' + Date.now(),
-                    nombre: desc,
-                    precio: Math.max(200, Number(platoConfig.precio)),
-                    cantidad: 1,
-                    esCustom: true
-                };
-                setCart([...cart, item]);
-                setShowPlatoModal(false);
-            };
-
-            const addToCart = (product) => {
-                if (product.esPlatoDia) {
-                    setShowPlatoModal(true);
-                    return;
-                }
-                const existing = cart.find(c => c.id === product.id);
-                if (existing) {
-                    setCart(cart.map(c => c.id === product.id ? { ...c, cantidad: c.cantidad + 1 } : c));
-                } else {
-                    setCart([...cart, { id: product.id, nombre: product.nombre, precio: product.venta, cantidad: 1 }]);
-                }
-            };
-
-            // Cálculos
-            const subtotal = cart.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
-            const discountAmount = (subtotal * discount) / 100;
-            const subtotalNeto = subtotal - discountAmount;
-            const itbis = subtotalNeto * (itbisRate / 100);
-            const total = subtotalNeto + itbis;
-
-            // DGII Lookup
-            const handleRncLookup = (rncVal) => {
-                setNewClient(prev => ({ ...prev, rnc: rncVal }));
-                const found = padronDGII.find(p => p.rnc === rncVal);
-                if (found) {
-                    setNewClient(prev => ({ ...prev, nombre: found.nombre }));
-                }
-            };
-
-            // Facturar
-            const handleFacturar = () => {
-                if (cart.length === 0) return alert('El carrito está vacío');
-                const clientObj = clients.find(c => c.id === selectedClient) || { nombre: 'Cliente General' };
-                
-                const invoice = {
-                    id: 'FAC-' + Math.floor(100000 + Math.random() * 900000),
-                    ncf: ncfType + '00000123',
-                    fecha: new Date().toLocaleString(),
-                    cliente: clientObj.nombre,
-                    rnc: clientObj.rnc,
-                    metodoPago: paymentMethod,
-                    items: [...cart],
-                    subtotal,
-                    discountAmount,
-                    itbis,
-                    total
-                };
-
-                if (paymentMethod === 'Credito') {
-                    setClients(clients.map(c => c.id === selectedClient ? { ...c, cxc: c.cxc + total } : c));
-                }
-
-                setLastInvoice(invoice);
-                setShowReceipt(true);
-                setCart([]);
-            };
-
-            return (
-                <div class="min-h-screen flex flex-col">
-                    {/* Header TopBar */}
-                    <header class="bg-sky-500 dark:bg-slate-800 text-white p-4 shadow-lg flex justify-between items-center">
-                        <div class="flex items-center space-x-3">
-                            <div class="bg-white text-sky-600 font-black px-3 py-1 rounded-xl text-xl shadow">AdTech</div>
-                            <span class="text-xs sm:text-sm font-light text-sky-100 border-l pl-3 border-sky-400">Sistema POS Cafetería</span>
+        <!-- Contenido Principal -->
+        <main class="main-content">
+            <!-- TAB: POS / FACTURACIÓN -->
+            <section id="tab-pos" class="tab-pane active">
+                <header class="content-header">
+                    <h2>Terminal de Facturación</h2>
+                    <button class="btn btn-danger" onclick="borrarFacturaCompleta()">🗑️ Borrar Factura Completa</button>
+                </header>
+                <div class="pos-grid">
+                    <div class="pos-cart">
+                        <h3>Ítems en Factura</h3>
+                        <table class="table" id="tablaFactura">
+                            <thead>
+                                <tr>
+                                    <th>Descripción</th>
+                                    <th>Cant</th>
+                                    <th>Precio</th>
+                                    <th>Subtotal</th>
+                                    <th>Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cartItemsBody">
+                                <!-- Dinámico -->
+                            </tbody>
+                        </table>
+                        <div class="cart-totals">
+                            <p>Subtotal: <span id="lblSubtotal">RD$ 0.00</span></p>
+                            <p>ITBIS (18%): <span id="lblItbis">RD$ 0.00</span></p>
+                            <h3>Total: <span id="lblTotal">RD$ 0.00</span></h3>
                         </div>
-                        
-                        <div class="flex items-center space-x-3">
-                            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 rounded-lg bg-sky-600 dark:bg-slate-700 hover:bg-sky-700 transition">
-                                <Icon name={theme === 'light' ? 'moon' : 'sun'} size={20} />
-                            </button>
-                            <button onClick={() => setActiveTab('config')} className="p-2 rounded-lg bg-sky-600 dark:bg-slate-700 hover:bg-sky-700 transition">
-                                <Icon name="settings" size={20} />
-                            </button>
-                        </div>
-                    </header>
-
-                    {/* Navigation Bar */}
-                    <nav class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 flex space-x-4 overflow-x-auto">
-                        {[
-                            { id: 'pos', label: 'Facturación / POS', icon: 'shopping-cart' },
-                            { id: 'menu', label: 'Menú e Inventario', icon: 'utensils' },
-                            { id: 'clients', label: 'Clientes & CxC', icon: 'users' },
-                            { id: 'suppliers', label: 'Proveedores & CxP', icon: 'truck' }
-                        ].map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center space-x-2 py-3 px-4 border-b-2 font-medium text-sm whitespace-nowrap transition-colors ${
-                                    activeTab === tab.id
-                                        ? 'border-sky-500 text-sky-600 dark:text-sky-400 font-bold'
-                                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400'
-                                }`}
-                            >
-                                <Icon name={tab.icon} size={16} />
-                                <span>{tab.label}</span>
-                            </button>
-                        ))}
-                    </nav>
-
-                    {/* Main Layout */}
-                    <main class="flex-1 p-4 max-w-7xl w-full mx-auto">
-                        {/* TAB 1: POS FACTURACIÓN */}
-                        {activeTab === 'pos' && (
-                            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                                {/* Paneles de Selección de Items (8 columnas) */}
-                                <div class="lg:col-span-7 flex flex-col space-y-4">
-                                    <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                                        <h2 class="font-bold text-lg text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                                            <Icon name="grid" size={20} /> Productos Disponibles
-                                        </h2>
-                                        <span class="text-xs bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 font-semibold px-2.5 py-1 rounded-full">
-                                            {products.filter(p => p.disponible).length} Items
-                                        </span>
-                                    </div>
-
-                                    {/* Grid Botones con Imagen */}
-                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                        {products.filter(p => p.disponible).map(product => (
-                                            <button
-                                                key={product.id}
-                                                onClick={() => addToCart(product)}
-                                                className="group relative bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition transform active:scale-95 border border-slate-200 dark:border-slate-700 flex flex-col text-left"
-                                            >
-                                                <div class="h-28 w-full overflow-hidden bg-slate-100 relative">
-                                                    <img src={product.img || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'} alt={product.nombre} class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
-                                                    {product.esPlatoDia && (
-                                                        <span class="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow">Personalizable</span>
-                                                    )}
-                                                </div>
-                                                <div class="p-3 flex flex-col justify-between flex-1 w-full">
-                                                    <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm line-clamp-1">{product.nombre}</span>
-                                                    <div class="flex justify-between items-center mt-2">
-                                                        <span class="text-xs font-semibold text-sky-600 dark:text-sky-400">RD$ {product.venta.toFixed(2)}</span>
-                                                        <span class="bg-sky-50 dark:bg-slate-700 text-sky-600 dark:text-sky-300 p-1.5 rounded-lg group-hover:bg-sky-500 group-hover:text-white transition">
-                                                            <Icon name="plus" size={14} />
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Panel Factura Carrito (5 columnas) */}
-                                <div class="lg:col-span-5 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-5 flex flex-col justify-between">
-                                    <div class="space-y-4">
-                                        {/* HEADER FACTURA / CLIENTE / PAGO */}
-                                        <div class="border-b border-slate-200 dark:border-slate-700 pb-4 space-y-3">
-                                            <h2 class="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center justify-between">
-                                                <span>Detalle de Factura</span>
-                                                <span class="text-xs font-normal text-slate-400">AdTech POS</span>
-                                            </h2>
-
-                                            {/* Selector Cliente */}
-                                            <div>
-                                                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Cliente</label>
-                                                <select
-                                                    value={selectedClient}
-                                                    onChange={e => setSelectedClient(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
-                                                >
-                                                    {clients.map(c => (
-                                                        <option key={c.id} value={c.id}>{c.nombre} {c.rnc ? `(${c.rnc})` : ''}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            {/* Forma de Pago y Comprobante */}
-                                            <div class="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Forma de Pago</label>
-                                                    <select
-                                                        value={paymentMethod}
-                                                        onChange={e => setPaymentMethod(e.target.value)}
-                                                        className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
-                                                    >
-                                                        <option value="Efectivo">Efectivo</option>
-                                                        <option value="Tarjeta">Tarjeta</option>
-                                                        <option value="Transferencia">Transferencia</option>
-                                                        <option value="Credito">A Crédito (CxC)</option>
-                                                    </select>
-                                                </div>
-                                                <div>
-                                                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">NCF / Comprobante</label>
-                                                    <select
-                                                        value={ncfType}
-                                                        onChange={e => setNcfType(e.target.value)}
-                                                        className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
-                                                    >
-                                                        <option value="B02">B02 Consumidor Final</option>
-                                                        <option value="B01">B01 Crédito Fiscal</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Lista Carrito Central */}
-                                        <div class="max-h-60 overflow-y-auto space-y-2 pr-1">
-                                            {cart.length === 0 ? (
-                                                <div class="text-center py-8 text-slate-400 text-sm">
-                                                    No hay items agregados a la factura
-                                                </div>
-                                            ) : (
-                                                cart.map((item, idx) => (
-                                                    <div key={idx} class="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-sm">
-                                                        <div class="flex-1 pr-2">
-                                                            <div class="font-medium text-slate-800 dark:text-slate-200">{item.nombre}</div>
-                                                            <div class="text-xs text-slate-400">RD$ {item.precio.toFixed(2)} c/u</div>
-                                                        </div>
-                                                        <div class="flex items-center space-x-2">
-                                                            <button
-                                                                onClick={() => {
-                                                                    if (item.cantidad > 1) {
-                                                                        setCart(cart.map(c => c.id === item.id ? { ...c, cantidad: c.cantidad - 1 } : c));
-                                                                    } else {
-                                                                        setCart(cart.filter(c => c.id !== item.id));
-                                                                    }
-                                                                }}
-                                                                className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center"
-                                                            >-</button>
-                                                            <span class="font-semibold px-1">{item.cantidad}</span>
-                                                            <button
-                                                                onClick={() => setCart(cart.map(c => c.id === item.id ? { ...c, cantidad: c.cantidad + 1 } : c))}
-                                                                className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center"
-                                                            >+</button>
-                                                        </div>
-                                                        <div class="w-16 text-right font-semibold text-slate-700 dark:text-slate-200">
-                                                            RD$ {(item.precio * item.cantidad).toFixed(2)}
-                                                        </div>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* FOOTER TOTALES */}
-                                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4 space-y-2">
-                                        <div class="flex justify-between text-xs text-slate-500">
-                                            <span>Subtotal</span>
-                                            <span>RD$ {subtotal.toFixed(2)}</span>
-                                        </div>
-                                        <div class="flex justify-between text-xs text-slate-500">
-                                            <span>ITBIS ({itbisRate}%)</span>
-                                            <span>RD$ {itbis.toFixed(2)}</span>
-                                        </div>
-                                        <div class="flex justify-between items-center text-xs text-slate-500">
-                                            <span>Descuento (%)</span>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="100"
-                                                value={discount}
-                                                onChange={e => setDiscount(Number(e.target.value))}
-                                                className="w-14 text-right bg-slate-100 dark:bg-slate-700 border rounded px-1 py-0.5 text-xs"
-                                            />
-                                        </div>
-                                        <div class="flex justify-between text-lg font-black text-slate-800 dark:text-slate-100 pt-2 border-t">
-                                            <span>TOTAL</span>
-                                            <span class="text-sky-600 dark:text-sky-400">RD$ {total.toFixed(2)}</span>
-                                        </div>
-
-                                        <button
-                                            onClick={handleFacturar}
-                                            className="w-full mt-3 bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2"
-                                        >
-                                            <Icon name="printer" size={18} />
-                                            <span>Generar Factura</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* TAB 2: MENÚ DE HOY E INVENTARIO */}
-                        {activeTab === 'menu' && (
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
-                                <div class="flex justify-between items-center">
-                                    <h2 class="text-xl font-bold">Administración de Menú e Inventario</h2>
-                                    <button
-                                        onClick={() => setShowProductModal(true)}
-                                        className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2"
-                                    >
-                                        <Icon name="plus" size={16} />
-                                        <span>Nuevo Producto</span>
-                                    </button>
-                                </div>
-
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-sm">
-                                        <thead class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                            <tr>
-                                                <th class="p-3">Producto</th>
-                                                <th class="p-3">Categoría</th>
-                                                <th class="p-3">Precio Costo</th>
-                                                <th class="p-3">Precio Venta</th>
-                                                <th class="p-3">Disponible Hoy</th>
-                                                <th class="p-3">Acción</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                                            {products.map(p => (
-                                                <tr key={p.id}>
-                                                    <td class="p-3 font-medium flex items-center space-x-3">
-                                                        <img src={p.img || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'} class="w-10 h-10 object-cover rounded-lg" />
-                                                        <span>{p.nombre}</span>
-                                                    </td>
-                                                    <td class="p-3">{p.categoria}</td>
-                                                    <td class="p-3">RD$ {p.costo.toFixed(2)}</td>
-                                                    <td class="p-3">RD$ {p.venta.toFixed(2)}</td>
-                                                    <td class="p-3">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={p.disponible}
-                                                            onChange={e => {
-                                                                setProducts(products.map(x => x.id === p.id ? { ...x, disponible: e.target.checked } : x));
-                                                            }}
-                                                            className="w-4 h-4 text-sky-600 rounded"
-                                                        />
-                                                    </td>
-                                                    <td class="p-3">
-                                                        <button
-                                                            onClick={() => setProducts(products.filter(x => x.id !== p.id))}
-                                                            className="text-red-500 hover:text-red-700"
-                                                        >
-                                                            <Icon name="trash-2" size={16} />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* TAB 3: CLIENTES Y CXC */}
-                        {activeTab === 'clients' && (
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
-                                <div class="flex justify-between items-center">
-                                    <h2 class="text-xl font-bold">Administración de Clientes & CxC</h2>
-                                    <button
-                                        onClick={() => setShowClientModal(true)}
-                                        className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2"
-                                    >
-                                        <Icon name="user-plus" size={16} />
-                                        <span>Agregar Cliente</span>
-                                    </button>
-                                </div>
-
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-sm">
-                                        <thead class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                            <tr>
-                                                <th class="p-3">Nombre / Razón Social</th>
-                                                <th class="p-3">RNC / Cédula</th>
-                                                <th class="p-3">Saldo CxC (Pendiente)</th>
-                                                <th class="p-3">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                                            {clients.map(c => (
-                                                <tr key={c.id}>
-                                                    <td class="p-3 font-medium">{c.nombre}</td>
-                                                    <td class="p-3">{c.rnc || 'N/A (Consumidor Final)'}</td>
-                                                    <td class="p-3 text-amber-600 dark:text-amber-400 font-bold">RD$ {c.cxc.toFixed(2)}</td>
-                                                    <td class="p-3">
-                                                        {c.cxc > 0 && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    setClients(clients.map(x => x.id === c.id ? { ...x, cxc: 0 } : x));
-                                                                    alert('Saldo de crédito pagado.');
-                                                                }}
-                                                                className="text-xs bg-emerald-500 text-white px-2 py-1 rounded hover:bg-emerald-600"
-                                                            >
-                                                                Cobrar CxC
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* TAB 4: PROVEEDORES Y CXP */}
-                        {activeTab === 'suppliers' && (
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
-                                <div class="flex justify-between items-center">
-                                    <h2 class="text-xl font-bold">Administración de Proveedores & CxP</h2>
-                                    <button
-                                        onClick={() => setShowSupplierModal(true)}
-                                        className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2"
-                                    >
-                                        <Icon name="truck" size={16} />
-                                        <span>Agregar Proveedor</span>
-                                    </button>
-                                </div>
-
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-sm">
-                                        <thead class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                            <tr>
-                                                <th class="p-3">Proveedor</th>
-                                                <th class="p-3">RNC</th>
-                                                <th class="p-3">Cuentas por Pagar (CxP)</th>
-                                                <th class="p-3">Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                                            {suppliers.map(s => (
-                                                <tr key={s.id}>
-                                                    <td class="p-3 font-medium">{s.nombre}</td>
-                                                    <td class="p-3">{s.rnc}</td>
-                                                    <td class="p-3 text-red-500 font-bold">RD$ {s.cxp.toFixed(2)}</td>
-                                                    <td class="p-3">
-                                                        <button
-                                                            onClick={() => {
-                                                                const monto = prompt('Monto a abonar/pagar a proveedor:');
-                                                                if (monto) {
-                                                                    setSuppliers(suppliers.map(x => x.id === s.id ? { ...x, cxp: Math.max(0, x.cxp - Number(monto)) } : x));
-                                                                }
-                                                            }}
-                                                            className="text-xs bg-sky-500 text-white px-2 py-1 rounded hover:bg-sky-600"
-                                                        >
-                                                            Abonar / Pagar
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* CONFIGURACION */}
-                        {activeTab === 'config' && (
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 max-w-lg mx-auto space-y-4">
-                                <h2 class="text-xl font-bold border-b pb-2">Configuración del Sistema AdTech</h2>
-                                <div>
-                                    <label class="block text-sm font-semibold mb-1">Tasa de ITBIS (%)</label>
-                                    <input
-                                        type="number"
-                                        value={itbisRate}
-                                        onChange={e => setItbisRate(Number(e.target.value))}
-                                        className="w-full bg-slate-50 dark:bg-slate-700 border p-2 rounded-lg"
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold mb-1">Modo Visual</label>
-                                    <button
-                                        onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                                        className="w-full bg-slate-100 dark:bg-slate-700 border p-2 rounded-lg text-left flex justify-between items-center"
-                                    >
-                                        <span>Tema Actual: <strong>{theme === 'light' ? 'Claro ( Celeste / Blanco )' : 'Oscuro ( Negro / Azul )'}</strong></span>
-                                        <Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </main>
-
-                    {/* MODAL PLATO DEL DIA */}
-                    {showPlatoModal && (
-                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
-                                <div class="flex justify-between items-center border-b pb-3">
-                                    <h3 class="text-lg font-bold">Armar Plato del Día</h3>
-                                    <button onClick={() => setShowPlatoModal(false)} className="text-slate-400 hover:text-slate-600">
-                                        <Icon name="x" size={20} />
-                                    </button>
-                                </div>
-
-                                <div class="space-y-3">
-                                    {/* Principal */}
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">1. Principal</label>
-                                        <div class="grid grid-cols-2 gap-2">
-                                            {['Arroz blanco', 'Arroz Moro', 'Arroz Amarillo', 'Locrio'].map(item => (
-                                                <button
-                                                    key={item}
-                                                    onClick={() => setPlatoConfig({ ...platoConfig, principal: item })}
-                                                    className={`p-2 text-xs rounded-lg border font-medium text-left ${
-                                                        platoConfig.principal === item
-                                                            ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 font-bold'
-                                                            : 'border-slate-200 dark:border-slate-700'
-                                                    }`}
-                                                >
-                                                    {item}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Carne */}
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">
-                                            2. Carne {isLocrio && <span class="text-red-500 font-normal">(No aplica para Locrio)</span>}
-                                        </label>
-                                        <div class="grid grid-cols-3 gap-2">
-                                            {['Pollo frito', 'Pollo guisado', 'Cerdo', 'Costilla', 'Chuleta', 'Res'].map(item => (
-                                                <button
-                                                    key={item}
-                                                    disabled={isLocrio}
-                                                    onClick={() => setPlatoConfig({ ...platoConfig, carne: item })}
-                                                    className={`p-2 text-xs rounded-lg border font-medium text-center ${
-                                                        isLocrio
-                                                            ? 'opacity-40 cursor-not-allowed border-slate-200'
-                                                            : platoConfig.carne === item
-                                                            ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 font-bold'
-                                                            : 'border-slate-200 dark:border-slate-700'
-                                                    }`}
-                                                >
-                                                    {item}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Ensalada */}
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">3. Ensalada</label>
-                                        <div class="grid grid-cols-3 gap-2">
-                                            {['Verde', 'Rusa', 'Colleslaw'].map(item => (
-                                                <button
-                                                    key={item}
-                                                    onClick={() => setPlatoConfig({ ...platoConfig, ensalada: item })}
-                                                    className={`p-2 text-xs rounded-lg border font-medium text-center ${
-                                                        platoConfig.ensalada === item
-                                                            ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 font-bold'
-                                                            : 'border-slate-200 dark:border-slate-700'
-                                                    }`}
-                                                >
-                                                    {item}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Extra */}
-                                    <div>
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">4. Extra</label>
-                                        <div class="grid grid-cols-3 gap-2">
-                                            {['Berenjena', 'arepa frita', 'platano frito'].map(item => (
-                                                <button
-                                                    key={item}
-                                                    onClick={() => setPlatoConfig({ ...platoConfig, extra: item })}
-                                                    className={`p-2 text-xs rounded-lg border font-medium text-center capitalize ${
-                                                        platoConfig.extra === item
-                                                            ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 font-bold'
-                                                            : 'border-slate-200 dark:border-slate-700'
-                                                    }`}
-                                                >
-                                                    {item}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Precio Variable */}
-                                    <div class="pt-2 border-t">
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Precio del Plato (Mínimo RD$ 200)</label>
-                                        <input
-                                            type="number"
-                                            min="200"
-                                            value={platoConfig.precio}
-                                            onChange={e => setPlatoConfig({ ...platoConfig, precio: Math.max(200, Number(e.target.value)) })}
-                                            className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 font-bold text-sky-600"
-                                        />
-                                    </div>
-                                </div>
-
-                                <button
-                                    onClick={handleAddPlatoDia}
-                                    className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl transition shadow-lg"
-                                >
-                                    Agregar al Carrito
-                                </button>
+                    </div>
+                    <div class="pos-actions">
+                        <h3>Datos del Cliente (DGII)</h3>
+                        <div class="form-group">
+                            <label>RNC / Cédula:</label>
+                            <div class="input-group">
+                                <input type="text" id="rncInput" placeholder="Ej: 00109565697" />
+                                <button class="btn btn-primary" onclick="verificarRNC()">🔍 Verificar</button>
                             </div>
                         </div>
-                    )}
-
-                    {/* MODAL TICKET RECEIPT / FACTURA */}
-                    {showReceipt && lastInvoice && (
-                        <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div class="bg-white text-slate-900 rounded-xl max-w-sm w-full p-6 shadow-2xl relative font-mono text-xs">
-                                <div id="printable-receipt" class="space-y-3 border p-4 rounded bg-slate-50">
-                                    <div class="text-center">
-                                        <h2 class="text-base font-black tracking-widest uppercase">CAFETERÍA ADTECH</h2>
-                                        <p>RNC: 130999888</p>
-                                        <p>Santo Domingo, R.D.</p>
-                                        <p class="mt-2 font-bold">{lastInvoice.ncf}</p>
-                                        <p class="text-[10px] text-slate-500">{lastInvoice.fecha}</p>
-                                    </div>
-
-                                    <div class="border-b border-t border-dashed border-slate-400 py-2 space-y-1">
-                                        <p><strong>Cliente:</strong> {lastInvoice.cliente}</p>
-                                        {lastInvoice.rnc && <p><strong>RNC/Cédula:</strong> {lastInvoice.rnc}</p>}
-                                        <p><strong>Pago:</strong> {lastInvoice.metodoPago}</p>
-                                    </div>
-
-                                    <div class="space-y-1">
-                                        {lastInvoice.items.map((it, i) => (
-                                            <div key={i} class="flex justify-between">
-                                                <span>{it.cantidad}x {it.nombre.substring(0, 22)}</span>
-                                                <span>RD$ {(it.precio * it.cantidad).toFixed(2)}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <div class="border-t border-dashed border-slate-400 pt-2 space-y-1 text-right">
-                                        <div class="flex justify-between">
-                                            <span>Subtotal:</span>
-                                            <span>RD$ {lastInvoice.subtotal.toFixed(2)}</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span>ITBIS:</span>
-                                            <span>RD$ {lastInvoice.itbis.toFixed(2)}</span>
-                                        </div>
-                                        <div class="flex justify-between text-sm font-black border-t pt-1">
-                                            <span>TOTAL:</span>
-                                            <span>RD$ {lastInvoice.total.toFixed(2)}</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="text-center pt-3 border-t text-[10px] text-slate-500">
-                                        ¡Gracias por su compra en AdTech!
-                                    </div>
-                                </div>
-
-                                <div class="mt-4 flex space-x-2">
-                                    <button
-                                        onClick={() => window.print()}
-                                        className="flex-1 bg-sky-500 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center space-x-1"
-                                    >
-                                        <Icon name="printer" size={16} />
-                                        <span>Imprimir</span>
-                                    </button>
-                                    <button
-                                        onClick={() => setShowReceipt(false)}
-                                        className="flex-1 bg-slate-200 text-slate-800 font-bold py-2 rounded-lg text-sm"
-                                    >
-                                        Cerrar
-                                    </button>
-                                </div>
-                            </div>
+                        <div class="form-group">
+                            <label>Razón Social / Nombre:</label>
+                            <input type="text" id="nombreClienteInput" placeholder="Cliente de Contado" readonly />
                         </div>
-                    )}
-
-                    {/* MODAL CREAR CLIENTE */}
-                    {showClientModal && (
-                        <div class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl max-w-md w-full space-y-4">
-                                <h3 class="font-bold text-lg">Nuevo Cliente</h3>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">RNC o Cédula (DGII Auto-completar)</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Ingrese RNC/Cédula..."
-                                        value={newClient.rnc}
-                                        onChange={e => handleRncLookup(e.target.value)}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                    <span class="text-[10px] text-slate-400">Ej de prueba DGII: 101010101 o 00112345678</span>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">Nombre / Razón Social</label>
-                                    <input
-                                        type="text"
-                                        value={newClient.nombre}
-                                        onChange={e => setNewClient({ ...newClient, nombre: e.target.value })}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button
-                                        onClick={() => {
-                                            if (!newClient.nombre) return alert('Ingrese nombre');
-                                            setClients([...clients, { id: Date.now().toString(), nombre: newClient.nombre, rnc: newClient.rnc, cxc: 0 }]);
-                                            setNewClient({ nombre: '', rnc: '' });
-                                            setShowClientModal(false);
-                                        }}
-                                        className="flex-1 bg-sky-500 text-white font-bold py-2 rounded-lg"
-                                    >
-                                        Guardar
-                                    </button>
-                                    <button onClick={() => setShowClientModal(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 py-2 rounded-lg">
-                                        Cancelar
-                                    </button>
-                                </div>
-                            </div>
+                        <div class="form-group">
+                            <label>Estado RNC:</label>
+                            <input type="text" id="estadoRncInput" placeholder="ACTIVO" readonly />
                         </div>
-                    )}
-
-                    {/* MODAL CREAR PROVEEDOR */}
-                    {showSupplierModal && (
-                        <div class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl max-w-md w-full space-y-4">
-                                <h3 class="font-bold text-lg">Nuevo Proveedor</h3>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">Nombre Proveedor</label>
-                                    <input
-                                        type="text"
-                                        value={newSupplier.nombre}
-                                        onChange={e => setNewSupplier({ ...newSupplier, nombre: e.target.value })}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">RNC</label>
-                                    <input
-                                        type="text"
-                                        value={newSupplier.rnc}
-                                        onChange={e => setNewSupplier({ ...newSupplier, rnc: e.target.value })}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button
-                                        onClick={() => {
-                                            if (!newSupplier.nombre) return alert('Ingrese el nombre');
-                                            setSuppliers([...suppliers, { id: Date.now().toString(), nombre: newSupplier.nombre, rnc: newSupplier.rnc, cxp: 0 }]);
-                                            setNewSupplier({ nombre: '', rnc: '' });
-                                            setShowSupplierModal(false);
-                                        }}
-                                        className="flex-1 bg-sky-500 text-white font-bold py-2 rounded-lg"
-                                    >
-                                        Guardar
-                                    </button>
-                                    <button onClick={() => setShowSupplierModal(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 py-2 rounded-lg">
-                                        Cancelar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL CREAR PRODUCTO */}
-                    {showProductModal && (
-                        <div class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl max-w-md w-full space-y-4">
-                                <h3 class="font-bold text-lg">Nuevo Producto</h3>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">Nombre</label>
-                                    <input
-                                        type="text"
-                                        value={newProduct.nombre}
-                                        onChange={e => setNewProduct({ ...newProduct, nombre: e.target.value })}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                </div>
-                                <div class="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label class="block text-xs font-semibold mb-1">Precio Costo (RD$)</label>
-                                        <input
-                                            type="number"
-                                            value={newProduct.costo}
-                                            onChange={e => setNewProduct({ ...newProduct, costo: Number(e.target.value) })}
-                                            className="w-full p-2 border rounded dark:bg-slate-700"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-semibold mb-1">Precio Venta (RD$)</label>
-                                        <input
-                                            type="number"
-                                            value={newProduct.venta}
-                                            onChange={e => setNewProduct({ ...newProduct, venta: Number(e.target.value) })}
-                                            className="w-full p-2 border rounded dark:bg-slate-700"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">URL Imagen</label>
-                                    <input
-                                        type="text"
-                                        placeholder="https://..."
-                                        value={newProduct.img}
-                                        onChange={e => setNewProduct({ ...newProduct, img: e.target.value })}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button
-                                        onClick={() => {
-                                            if (!newProduct.nombre) return alert('Ingrese nombre');
-                                            setProducts([...products, { id: Date.now().toString(), ...newProduct, disponible: true }]);
-                                            setNewProduct({ nombre: '', costo: 0, venta: 0, categoria: 'Refrescos', img: '' });
-                                            setShowProductModal(false);
-                                        }}
-                                        className="flex-1 bg-sky-500 text-white font-bold py-2 rounded-lg"
-                                    >
-                                        Guardar
-                                    </button>
-                                    <button onClick={() => setShowProductModal(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 py-2 rounded-lg">
-                                        Cancelar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                        <button class="btn btn-success btn-lg" onclick="procesarPago()">💳 Procesar Cobro</button>
+                    </div>
                 </div>
-            );
-        }
+            </section>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+            <!-- TAB: MENÚ DEL DÍA -->
+            <section id="tab-menu" class="tab-pane" style="display:none;">
+                <header class="content-header">
+                    <h2>Gestión del Menú del Día</h2>
+                    <button class="btn btn-primary" onclick="abrirModalMenu()">+ Agregar Plato al Menú</button>
+                </header>
+                <div class="form-group" style="max-width: 300px; margin-bottom: 20px;">
+                    <label>Seleccionar Fecha:</label>
+                    <input type="date" id="fechaMenu" class="form-control" onchange="cargarMenuDia()">
+                </div>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Plato / Producto</th>
+                                <th>Categoría</th>
+                                <th>Precio Especial</th>
+                                <th>Disponibilidad</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaMenuDiaBody">
+                            <!-- Dinámico -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- TAB: PRODUCTOS -->
+            <section id="tab-productos" class="tab-pane" style="display:none;">
+                <header class="content-header">
+                    <h2>Catálogo de Productos</h2>
+                    <button class="btn btn-primary" onclick="abrirModalProducto()">+ Nuevo Producto</button>
+                </header>
+                <div class="products-grid" id="productsGrid">
+                    <!-- Tarjetas de productos con imagen -->
+                </div>
+            </section>
+
+            <!-- TAB: CLIENTES -->
+            <section id="tab-clientes" class="tab-pane" style="display:none;">
+                <header class="content-header">
+                    <h2>Base de Datos de Clientes & RNC</h2>
+                </header>
+                <p>Verifique o busque clientes directamente en el padrón de contribuyentes de la DGII.</p>
+                <div class="form-group" style="max-width: 500px;">
+                    <input type="text" id="busquedaClienteGeneral" placeholder="Buscar por RNC o Nombre..." oninput="filtrarClientesDGII(this.value)" />
+                </div>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>RNC / Cédula</th>
+                                <th>Razón Social</th>
+                                <th>Nombre Comercial</th>
+                                <th>Estado</th>
+                                <th>Régimen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tablaClientesBody">
+                            <!-- Dinámico -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- TAB: CONFIGURACIÓN -->
+            <section id="tab-config" class="tab-pane" style="display:none;">
+                <header class="content-header">
+                    <h2>Configuración del Sistema</h2>
+                </header>
+                <div class="card">
+                    <h3>Actualizar Base de Datos DGII (DGII_RNC.TXT)</h3>
+                    <p>Sube el archivo oficial delimitado por barras (|) para mantener actualizados los RNCs y Cédulas.</p>
+                    <input type="file" id="fileDGII" accept=".txt,.csv" onchange="actualizarBaseDatosDGII(event)" />
+                    <p id="statusDGII" style="margin-top: 10px; font-weight: bold; color: green;"></p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODAL NUEVO PRODUCTO CON IMAGEN PC / URL -->
+    <div id="modalProducto" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h3>Registrar Nuevo Producto</h3>
+            <div class="form-group">
+                <label>Nombre del Producto:</label>
+                <input type="text" id="prodNombre" />
+            </div>
+            <div class="form-group">
+                <label>Precio (RD$):</label>
+                <input type="number" id="prodPrecio" />
+            </div>
+            <div class="form-group">
+                <label>Imagen del Producto:</label>
+                <div class="image-preview-box" id="imagePreviewContainer">
+                    <img id="imgDisplay" src="assets/img/placeholder.png" alt="Vista previa" style="max-width: 120px; max-height: 120px; object-fit: cover;" />
+                </div>
+                <input type="file" id="fileInputImg" accept="image/*" style="display:none;" onchange="previewFromFile(event)">
+                <div class="btn-group" style="margin-top: 10px;">
+                    <button class="btn btn-secondary" onclick="document.getElementById('fileInputImg').click()">📁 Cargar desde PC</button>
+                    <button class="btn btn-secondary" onclick="promptImageUrl()">🌐 Cargar desde URL</button>
+                </div>
+            </div>
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn btn-success" onclick="guardarProducto()">Guardar Producto</button>
+                <button class="btn btn-danger" onclick="cerrarModalProducto()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
 </body>
 </html>
