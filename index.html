@@ -231,6 +231,19 @@
                 }
             };
 
+            // Borrar Factura Completa con Confirmación
+            const handleClearInvoice = () => {
+                if (cart.length === 0) {
+                    return alert('El carrito ya está vacío.');
+                }
+                if (confirm('¿Está seguro de que desea borrar la factura completa? Se perderán todos los ítems agregados.')) {
+                    setCart([]);
+                    setDiscount(0);
+                    setSelectedClient('1');
+                    setPaymentMethod('Efectivo');
+                }
+            };
+
             // Manejo de carga de imagen local (FileReader)
             const handleImageFileChange = (e) => {
                 const file = e.target.files[0];
@@ -267,10 +280,8 @@
             const handleSaveProduct = () => {
                 if (!productForm.nombre) return alert('Ingrese el nombre del producto.');
                 if (editingProductId) {
-                    // Editar
                     setProducts(products.map(p => p.id === editingProductId ? { ...p, ...productForm } : p));
                 } else {
-                    // Crear nuevo
                     const newProd = {
                         id: Date.now().toString(),
                         ...productForm,
@@ -413,10 +424,21 @@
                                 <div class="lg:col-span-5 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-5 flex flex-col justify-between">
                                     <div class="space-y-4">
                                         <div class="border-b border-slate-200 dark:border-slate-700 pb-4 space-y-3">
-                                            <h2 class="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center justify-between">
-                                                <span>Detalle de Factura</span>
-                                                <span class="text-xs font-normal text-slate-400">AdTech POS</span>
-                                            </h2>
+                                            <div class="flex justify-between items-center">
+                                                <h2 class="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                                    <span>Detalle de Factura</span>
+                                                </h2>
+                                                {cart.length > 0 && (
+                                                    <button
+                                                        onClick={handleClearInvoice}
+                                                        className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-800 transition flex items-center gap-1 shadow-sm"
+                                                        title="Borrar factura completa"
+                                                    >
+                                                        <Icon name="trash-2" size={14} />
+                                                        <span>Borrar Factura</span>
+                                                    </button>
+                                                )}
+                                            </div>
 
                                             <div>
                                                 <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Cliente</label>
@@ -534,7 +556,7 @@
                             </div>
                         )}
 
-                        {/* TAB 2: MENÚ DEL DÍA (DISPONIBILIDAD Y CONFIGURACIÓN DIARIA) */}
+                        {/* TAB 2: MENÚ DEL DÍA */}
                         {activeTab === 'menudia' && (
                             <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-4xl mx-auto">
                                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
@@ -781,7 +803,7 @@
                             </div>
                         )}
 
-                        {/* TAB 3: INVENTARIO & PRODUCTOS (CON BOTÓN EDITAR Y GESTIÓN DE IMAGEN PC/WEB) */}
+                        {/* TAB 3: INVENTARIO & PRODUCTOS */}
                         {activeTab === 'inventory' && (
                             <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
                                 <div class="flex justify-between items-center">
@@ -1262,7 +1284,7 @@
                         </div>
                     )}
 
-                    {/* MODAL NUEVO / EDITAR PRODUCTO CON CARGA DE IMAGEN PC O WEB */}
+                    {/* MODAL NUEVO / EDITAR PRODUCTO */}
                     {showProductModal && (
                         <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                             <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
@@ -1323,7 +1345,6 @@
                                         </select>
                                     </div>
 
-                                    {/* Sección para Imagen (PC o Web) */}
                                     <div class="space-y-2 border p-3 rounded-xl bg-slate-50 dark:bg-slate-700/30">
                                         <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">Imagen del Artículo</label>
                                         
@@ -1337,7 +1358,6 @@
                                             </div>
                                             
                                             <div class="flex-1 space-y-2">
-                                                {/* Cargar desde PC */}
                                                 <div>
                                                     <label class="block text-[11px] font-medium text-slate-500 mb-0.5">Subir desde PC:</label>
                                                     <input
