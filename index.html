@@ -40,6 +40,11 @@
 <body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors duration-200">
     <div id="root"></div>
 
+    <!-- Componentes modulares reutilizables -->
+    <script type="text/babel" src="./js/components/ClienteFormulario.js"></script>
+    <script type="text/babel" src="./js/components/ConfiguracionDatos.js"></script>
+    <script type="text/babel" src="./js/components/ConfiguracionGeneral.js"></script>
+
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
@@ -64,12 +69,28 @@
             // Estados de Configuración y Tema
             const [theme, setTheme] = useState(localStorage.getItem('adtech_theme') || 'light');
             const [activeTab, setActiveTab] = useState('pos');
+            const [configSubTab, setConfigSubTab] = useState('general'); // 'general' | 'datos'
             const [itbisRate, setItbisRate] = useState(18);
+
+            // Datos de Empresa / Negocio
+            const [negocioConfig, setNegocioConfig] = useState(() => {
+                const saved = localStorage.getItem('adtech_negocio_config');
+                return saved ? JSON.parse(saved) : {
+                    nombreNegocio: 'Cafetería & Restaurant AdTech',
+                    rnc: '130999888',
+                    telefono: '(809) 555-0192',
+                    direccion: 'Santo Domingo, R.D.',
+                    moneda: 'RD$',
+                    itbis: 18,
+                    tema: 'light',
+                    pieFactura: '¡Gracias por su compra en AdTech!'
+                };
+            });
 
             // Fecha actual del menú
             const [menuDate, setMenuDate] = useState(new Date().toISOString().split('T')[0]);
 
-            // Elementos disponibles para el Menú del Día (Arroces, Carnes, Ensaladas, Extras) con disponibilidad diaria
+            // Elementos disponibles para el Menú del Día
             const [menuDiaConfig, setMenuDiaConfig] = useState(() => {
                 const saved = localStorage.getItem('adtech_menu_dia_config');
                 return saved ? JSON.parse(saved) : {
@@ -148,9 +169,8 @@
             const [showReceipt, setShowReceipt] = useState(false);
             const [lastInvoice, setLastInvoice] = useState(null);
 
-            // Modales de Administración (Clientes, Proveedores, Productos con soporte de Edición)
+            // Modales de Administración
             const [showClientModal, setShowClientModal] = useState(false);
-            const [newClient, setNewClient] = useState({ nombre: '', rnc: '' });
             const [showSupplierModal, setShowSupplierModal] = useState(false);
             const [newSupplier, setNewSupplier] = useState({ nombre: '', rnc: '' });
             
@@ -231,7 +251,7 @@
                 }
             };
 
-            // Borrar Factura Completa con Confirmación
+            // Borrar Factura Completa
             const handleClearInvoice = () => {
                 if (cart.length === 0) {
                     return alert('El carrito ya está vacío.');
@@ -244,7 +264,7 @@
                 }
             };
 
-            // Manejo de carga de imagen local (FileReader)
+            // Manejo de carga de imagen local
             const handleImageFileChange = (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -256,14 +276,12 @@
                 }
             };
 
-            // Abrir modal para crear producto
             const openNewProductModal = () => {
                 setEditingProductId(null);
                 setProductForm({ nombre: '', costo: 0, venta: 0, categoria: 'Bebidas', img: '' });
                 setShowProductModal(true);
             };
 
-            // Abrir modal para editar producto existente
             const openEditProductModal = (prod) => {
                 setEditingProductId(prod.id);
                 setProductForm({
@@ -276,7 +294,6 @@
                 setShowProductModal(true);
             };
 
-            // Guardar producto (Nuevo o Editado)
             const handleSaveProduct = () => {
                 if (!productForm.nombre) return alert('Ingrese el nombre del producto.');
                 if (editingProductId) {
@@ -292,21 +309,19 @@
                 setShowProductModal(false);
             };
 
+            // Guardar cliente desde formulario DGII
+            const handleGuardarNuevoCliente = (nuevoClienteObj) => {
+                setClients([...clients, nuevoClienteObj]);
+                setSelectedClient(nuevoClienteObj.id);
+                setShowClientModal(false);
+            };
+
             // Cálculos
             const subtotal = cart.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
             const discountAmount = (subtotal * discount) / 100;
             const subtotalNeto = subtotal - discountAmount;
             const itbis = subtotalNeto * (itbisRate / 100);
             const total = subtotalNeto + itbis;
-
-            // DGII Lookup
-            const handleRncLookup = (rncVal) => {
-                setNewClient(prev => ({ ...prev, rnc: rncVal }));
-                const found = padronDGII.find(p => p.rnc === rncVal);
-                if (found) {
-                    setNewClient(prev => ({ ...prev, nombre: found.nombre }));
-                }
-            };
 
             // Facturar
             const handleFacturar = () => {
@@ -342,14 +357,16 @@
                     <header class="bg-sky-500 dark:bg-slate-800 text-white p-4 shadow-lg flex justify-between items-center">
                         <div class="flex items-center space-x-3">
                             <div class="bg-white text-sky-600 font-black px-3 py-1 rounded-xl text-xl shadow">AdTech</div>
-                            <span class="text-xs sm:text-sm font-light text-sky-100 border-l pl-3 border-sky-400">Sistema POS Cafetería</span>
+                            <span class="text-xs sm:text-sm font-light text-sky-100 border-l pl-3 border-sky-400">
+                                {negocioConfig.nombreNegocio || 'Sistema POS Cafetería'}
+                            </span>
                         </div>
                         
                         <div class="flex items-center space-x-3">
-                            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 rounded-lg bg-sky-600 dark:bg-slate-700 hover:bg-sky-700 transition">
+                            <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 rounded-lg bg-sky-600 dark:bg-slate-700 hover:bg-sky-700 transition" title="Cambiar Tema">
                                 <Icon name={theme === 'light' ? 'moon' : 'sun'} size={20} />
                             </button>
-                            <button onClick={() => setActiveTab('config')} className="p-2 rounded-lg bg-sky-600 dark:bg-slate-700 hover:bg-sky-700 transition">
+                            <button onClick={() => setActiveTab('config')} className="p-2 rounded-lg bg-sky-600 dark:bg-slate-700 hover:bg-sky-700 transition" title="Configuración">
                                 <Icon name="settings" size={20} />
                             </button>
                         </div>
@@ -362,7 +379,8 @@
                             { id: 'menudia', label: 'Menú del Día (Disponibilidad)', icon: 'utensils' },
                             { id: 'inventory', label: 'Inventario & Productos', icon: 'grid' },
                             { id: 'clients', label: 'Clientes & CxC', icon: 'users' },
-                            { id: 'suppliers', label: 'Proveedores & CxP', icon: 'truck' }
+                            { id: 'suppliers', label: 'Proveedores & CxP', icon: 'truck' },
+                            { id: 'config', label: 'Configuración & Datos', icon: 'settings' }
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -410,7 +428,9 @@
                                                 <div class="p-3 flex flex-col justify-between flex-1 w-full">
                                                     <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm line-clamp-1">{product.nombre}</span>
                                                     <div class="flex justify-between items-center mt-2">
-                                                        <span class="text-xs font-semibold text-sky-600 dark:text-sky-400">RD$ {product.esPlatoDia ? menuDiaConfig.precioBase.toFixed(2) : product.venta.toFixed(2)}</span>
+                                                        <span class="text-xs font-semibold text-sky-600 dark:text-sky-400">
+                                                            {negocioConfig.moneda || 'RD$'} {product.esPlatoDia ? menuDiaConfig.precioBase.toFixed(2) : product.venta.toFixed(2)}
+                                                        </span>
                                                         <span class="bg-sky-50 dark:bg-slate-700 text-sky-600 dark:text-sky-300 p-1.5 rounded-lg group-hover:bg-sky-500 group-hover:text-white transition">
                                                             <Icon name="plus" size={14} />
                                                         </span>
@@ -441,7 +461,12 @@
                                             </div>
 
                                             <div>
-                                                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Cliente</label>
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400">Cliente</label>
+                                                    <button onClick={() => setShowClientModal(true)} className="text-[11px] text-sky-600 hover:underline font-bold">
+                                                        + Verificar / Nuevo Cliente
+                                                    </button>
+                                                </div>
                                                 <select
                                                     value={selectedClient}
                                                     onChange={e => setSelectedClient(e.target.value)}
@@ -491,7 +516,7 @@
                                                     <div key={idx} class="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-sm">
                                                         <div class="flex-1 pr-2">
                                                             <div class="font-medium text-slate-800 dark:text-slate-200">{item.nombre}</div>
-                                                            <div class="text-xs text-slate-400">RD$ {item.precio.toFixed(2)} c/u</div>
+                                                            <div class="text-xs text-slate-400">{negocioConfig.moneda || 'RD$'} {item.precio.toFixed(2)} c/u</div>
                                                         </div>
                                                         <div class="flex items-center space-x-2">
                                                             <button
@@ -511,7 +536,7 @@
                                                             >+</button>
                                                         </div>
                                                         <div class="w-16 text-right font-semibold text-slate-700 dark:text-slate-200">
-                                                            RD$ {(item.precio * item.cantidad).toFixed(2)}
+                                                            {negocioConfig.moneda || 'RD$'} {(item.precio * item.cantidad).toFixed(2)}
                                                         </div>
                                                     </div>
                                                 ))
@@ -522,11 +547,11 @@
                                     <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4 space-y-2">
                                         <div class="flex justify-between text-xs text-slate-500">
                                             <span>Subtotal</span>
-                                            <span>RD$ {subtotal.toFixed(2)}</span>
+                                            <span>{negocioConfig.moneda || 'RD$'} {subtotal.toFixed(2)}</span>
                                         </div>
                                         <div class="flex justify-between text-xs text-slate-500">
                                             <span>ITBIS ({itbisRate}%)</span>
-                                            <span>RD$ {itbis.toFixed(2)}</span>
+                                            <span>{negocioConfig.moneda || 'RD$'} {itbis.toFixed(2)}</span>
                                         </div>
                                         <div class="flex justify-between items-center text-xs text-slate-500">
                                             <span>Descuento (%)</span>
@@ -541,7 +566,7 @@
                                         </div>
                                         <div class="flex justify-between text-lg font-black text-slate-800 dark:text-slate-100 pt-2 border-t">
                                             <span>TOTAL</span>
-                                            <span class="text-sky-600 dark:text-sky-400">RD$ {total.toFixed(2)}</span>
+                                            <span class="text-sky-600 dark:text-sky-400">{negocioConfig.moneda || 'RD$'} {total.toFixed(2)}</span>
                                         </div>
 
                                         <button
@@ -791,7 +816,7 @@
                                         <p class="text-xs text-sky-600 dark:text-sky-400">Precio estándar aplicable al armar el plato.</p>
                                     </div>
                                     <div class="flex items-center space-x-2">
-                                        <span class="font-bold text-sm">RD$</span>
+                                        <span class="font-bold text-sm">{negocioConfig.moneda || 'RD$'}</span>
                                         <input
                                             type="number"
                                             value={menuDiaConfig.precioBase}
@@ -837,8 +862,8 @@
                                                         <span>{p.nombre}</span>
                                                     </td>
                                                     <td class="p-3">{p.categoria}</td>
-                                                    <td class="p-3">RD$ {p.costo.toFixed(2)}</td>
-                                                    <td class="p-3">RD$ {p.venta.toFixed(2)}</td>
+                                                    <td class="p-3">{negocioConfig.moneda || 'RD$'} {p.costo.toFixed(2)}</td>
+                                                    <td class="p-3">{negocioConfig.moneda || 'RD$'} {p.venta.toFixed(2)}</td>
                                                     <td class="p-3">
                                                         <input
                                                             type="checkbox"
@@ -884,10 +909,10 @@
                                     <h2 class="text-xl font-bold">Administración de Clientes & CxC</h2>
                                     <button
                                         onClick={() => setShowClientModal(true)}
-                                        className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2"
+                                        className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2 shadow"
                                     >
                                         <Icon name="user-plus" size={16} />
-                                        <span>Agregar Cliente</span>
+                                        <span>+ Verificar / Registrar Cliente (DGII)</span>
                                     </button>
                                 </div>
 
@@ -897,6 +922,7 @@
                                             <tr>
                                                 <th class="p-3">Nombre / Razón Social</th>
                                                 <th class="p-3">RNC / Cédula</th>
+                                                <th class="p-3">Estado / Régimen</th>
                                                 <th class="p-3">Saldo CxC (Pendiente)</th>
                                                 <th class="p-3">Acciones</th>
                                             </tr>
@@ -906,7 +932,8 @@
                                                 <tr key={c.id}>
                                                     <td class="p-3 font-medium">{c.nombre}</td>
                                                     <td class="p-3">{c.rnc || 'N/A (Consumidor Final)'}</td>
-                                                    <td class="p-3 text-amber-600 dark:text-amber-400 font-bold">RD$ {c.cxc.toFixed(2)}</td>
+                                                    <td class="p-3 text-xs text-slate-500">{c.estado ? `${c.estado} (${c.regimen || 'NORMAL'})` : 'Registrado'}</td>
+                                                    <td class="p-3 text-amber-600 dark:text-amber-400 font-bold">{negocioConfig.moneda || 'RD$'} {(c.cxc || 0).toFixed(2)}</td>
                                                     <td class="p-3">
                                                         {c.cxc > 0 && (
                                                             <button
@@ -914,7 +941,7 @@
                                                                     setClients(clients.map(x => x.id === c.id ? { ...x, cxc: 0 } : x));
                                                                     alert('Saldo de crédito pagado.');
                                                                 }}
-                                                                className="text-xs bg-emerald-500 text-white px-2 py-1 rounded hover:bg-emerald-600"
+                                                                className="text-xs bg-emerald-500 text-white px-2.5 py-1 rounded hover:bg-emerald-600 font-medium"
                                                             >
                                                                 Cobrar CxC
                                                             </button>
@@ -935,7 +962,7 @@
                                     <h2 class="text-xl font-bold">Administración de Proveedores & CxP</h2>
                                     <button
                                         onClick={() => setShowSupplierModal(true)}
-                                        className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2"
+                                        className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2 shadow"
                                     >
                                         <Icon name="truck" size={16} />
                                         <span>Agregar Proveedor</span>
@@ -957,7 +984,7 @@
                                                 <tr key={s.id}>
                                                     <td class="p-3 font-medium">{s.nombre}</td>
                                                     <td class="p-3">{s.rnc}</td>
-                                                    <td class="p-3 text-red-500 font-bold">RD$ {s.cxp.toFixed(2)}</td>
+                                                    <td class="p-3 text-red-500 font-bold">{negocioConfig.moneda || 'RD$'} {s.cxp.toFixed(2)}</td>
                                                     <td class="p-3">
                                                         <button
                                                             onClick={() => {
@@ -966,7 +993,7 @@
                                                                     setSuppliers(suppliers.map(x => x.id === s.id ? { ...x, cxp: Math.max(0, x.cxp - Number(monto)) } : x));
                                                                 }
                                                             }}
-                                                            className="text-xs bg-sky-500 text-white px-2 py-1 rounded hover:bg-sky-600"
+                                                            className="text-xs bg-sky-500 text-white px-2.5 py-1 rounded hover:bg-sky-600 font-medium"
                                                         >
                                                             Abonar / Pagar
                                                         </button>
@@ -979,29 +1006,44 @@
                             </div>
                         )}
 
-                        {/* CONFIGURACION */}
+                        {/* TAB 6: CONFIGURACIÓN & DATOS (MODULAR INTEGRADO) */}
                         {activeTab === 'config' && (
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 max-w-lg mx-auto space-y-4">
-                                <h2 class="text-xl font-bold border-b pb-2">Configuración del Sistema AdTech</h2>
-                                <div>
-                                    <label class="block text-sm font-semibold mb-1">Tasa de ITBIS (%)</label>
-                                    <input
-                                        type="number"
-                                        value={itbisRate}
-                                        onChange={e => setItbisRate(Number(e.target.value))}
-                                        className="w-full bg-slate-50 dark:bg-slate-700 border p-2 rounded-lg"
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-semibold mb-1">Modo Visual</label>
+                            <div class="space-y-6">
+                                <div class="flex justify-center border-b border-slate-200 dark:border-slate-700 max-w-md mx-auto">
                                     <button
-                                        onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                                        className="w-full bg-slate-100 dark:bg-slate-700 border p-2 rounded-lg text-left flex justify-between items-center"
+                                        onClick={() => setConfigSubTab('general')}
+                                        className={`px-6 py-2.5 font-bold text-sm border-b-2 transition ${
+                                            configSubTab === 'general'
+                                                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
+                                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                                        }`}
                                     >
-                                        <span>Tema Actual: <strong>{theme === 'light' ? 'Claro ( Celeste / Blanco )' : 'Oscuro ( Negro / Azul )'}</strong></span>
-                                        <Icon name={theme === 'light' ? 'moon' : 'sun'} size={18} />
+                                        ⚙️ Datos del Negocio & Tema
+                                    </button>
+                                    <button
+                                        onClick={() => setConfigSubTab('datos')}
+                                        className={`px-6 py-2.5 font-bold text-sm border-b-2 transition ${
+                                            configSubTab === 'datos'
+                                                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
+                                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        📊 Almacenamiento & Respaldos
                                     </button>
                                 </div>
+
+                                {configSubTab === 'general' ? (
+                                    <ConfiguracionGeneral 
+                                        config={negocioConfig} 
+                                        setConfig={setNegocioConfig}
+                                        theme={theme}
+                                        setTheme={setTheme}
+                                        itbisRate={itbisRate}
+                                        setItbisRate={setItbisRate}
+                                    />
+                                ) : (
+                                    <ConfiguracionDatos />
+                                )}
                             </div>
                         )}
                     </main>
@@ -1108,7 +1150,9 @@
                                     </div>
 
                                     <div class="pt-2 border-t">
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Precio del Plato (Mínimo RD$ {menuDiaConfig.precioBase})</label>
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">
+                                            Precio del Plato (Mínimo {negocioConfig.moneda || 'RD$'} {menuDiaConfig.precioBase})
+                                        </label>
                                         <input
                                             type="number"
                                             min={menuDiaConfig.precioBase}
@@ -1135,9 +1179,10 @@
                             <div class="bg-white text-slate-900 rounded-xl max-w-sm w-full p-6 shadow-2xl relative font-mono text-xs">
                                 <div id="printable-receipt" class="space-y-3 border p-4 rounded bg-slate-50">
                                     <div class="text-center">
-                                        <h2 class="text-base font-black tracking-widest uppercase">CAFETERÍA ADTECH</h2>
-                                        <p>RNC: 130999888</p>
-                                        <p>Santo Domingo, R.D.</p>
+                                        <h2 class="text-base font-black tracking-widest uppercase">{negocioConfig.nombreNegocio || 'CAFETERÍA ADTECH'}</h2>
+                                        <p>RNC: {negocioConfig.rnc || '130999888'}</p>
+                                        {negocioConfig.telefono && <p>Tel: {negocioConfig.telefono}</p>}
+                                        <p>{negocioConfig.direccion || 'Santo Domingo, R.D.'}</p>
                                         <p class="mt-2 font-bold">{lastInvoice.ncf}</p>
                                         <p class="text-[10px] text-slate-500">{lastInvoice.fecha}</p>
                                     </div>
@@ -1152,7 +1197,7 @@
                                         {lastInvoice.items.map((it, i) => (
                                             <div key={i} class="flex justify-between">
                                                 <span>{it.cantidad}x {it.nombre.substring(0, 25)}</span>
-                                                <span>RD$ {(it.precio * it.cantidad).toFixed(2)}</span>
+                                                <span>{negocioConfig.moneda || 'RD$'} {(it.precio * it.cantidad).toFixed(2)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -1160,20 +1205,20 @@
                                     <div class="border-t border-dashed border-slate-400 pt-2 space-y-1 text-right">
                                         <div class="flex justify-between">
                                             <span>Subtotal:</span>
-                                            <span>RD$ {lastInvoice.subtotal.toFixed(2)}</span>
+                                            <span>{negocioConfig.moneda || 'RD$'} {lastInvoice.subtotal.toFixed(2)}</span>
                                         </div>
                                         <div class="flex justify-between">
                                             <span>ITBIS:</span>
-                                            <span>RD$ {lastInvoice.itbis.toFixed(2)}</span>
+                                            <span>{negocioConfig.moneda || 'RD$'} {lastInvoice.itbis.toFixed(2)}</span>
                                         </div>
                                         <div class="flex justify-between text-sm font-black border-t pt-1">
                                             <span>TOTAL:</span>
-                                            <span>RD$ {lastInvoice.total.toFixed(2)}</span>
+                                            <span>{negocioConfig.moneda || 'RD$'} {lastInvoice.total.toFixed(2)}</span>
                                         </div>
                                     </div>
 
                                     <div class="text-center pt-3 border-t text-[10px] text-slate-500">
-                                        ¡Gracias por su compra en AdTech!
+                                        {negocioConfig.pieFactura || '¡Gracias por su compra en AdTech!'}
                                     </div>
                                 </div>
 
@@ -1196,47 +1241,14 @@
                         </div>
                     )}
 
-                    {/* MODAL CREAR CLIENTE */}
+                    {/* MODAL CREAR / VERIFICAR CLIENTE CON FORMULARIO DGII INTEGRADO */}
                     {showClientModal && (
-                        <div class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl max-w-md w-full space-y-4">
-                                <h3 class="font-bold text-lg">Nuevo Cliente</h3>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">RNC o Cédula (DGII Auto-completar)</label>
-                                    <input
-                                        type="text"
-                                        placeholder="Ingrese RNC/Cédula..."
-                                        value={newClient.rnc}
-                                        onChange={e => handleRncLookup(e.target.value)}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                    <span class="text-[10px] text-slate-400">Ej: 101010101 o 00112345678</span>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">Nombre / Razón Social</label>
-                                    <input
-                                        type="text"
-                                        value={newClient.nombre}
-                                        onChange={e => setNewClient({ ...newClient, nombre: e.target.value })}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button
-                                        onClick={() => {
-                                            if (!newClient.nombre) return alert('Ingrese nombre');
-                                            setClients([...clients, { id: Date.now().toString(), nombre: newClient.nombre, rnc: newClient.rnc, cxc: 0 }]);
-                                            setNewClient({ nombre: '', rnc: '' });
-                                            setShowClientModal(false);
-                                        }}
-                                        className="flex-1 bg-sky-500 text-white font-bold py-2 rounded-lg"
-                                    >
-                                        Guardar
-                                    </button>
-                                    <button onClick={() => setShowClientModal(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 py-2 rounded-lg">
-                                        Cancelar
-                                    </button>
-                                </div>
+                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                            <div class="my-8 w-full max-w-2xl">
+                                <ClienteFormulario 
+                                    onGuardarCliente={handleGuardarNuevoCliente}
+                                    onCancelar={() => setShowClientModal(false)}
+                                />
                             </div>
                         </div>
                     )}
@@ -1244,7 +1256,7 @@
                     {/* MODAL CREAR PROVEEDOR */}
                     {showSupplierModal && (
                         <div class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl max-w-md w-full space-y-4">
+                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl max-w-md w-full space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
                                 <h3 class="font-bold text-lg">Nuevo Proveedor</h3>
                                 <div>
                                     <label class="block text-xs font-semibold mb-1">Nombre Proveedor</label>
@@ -1311,7 +1323,7 @@
 
                                     <div class="grid grid-cols-2 gap-2">
                                         <div>
-                                            <label class="block text-xs font-semibold mb-1">Precio Costo (RD$)</label>
+                                            <label class="block text-xs font-semibold mb-1">Precio Costo ({negocioConfig.moneda || 'RD$'})</label>
                                             <input
                                                 type="number"
                                                 value={productForm.costo}
@@ -1320,7 +1332,7 @@
                                             />
                                         </div>
                                         <div>
-                                            <label class="block text-xs font-semibold mb-1">Precio Venta (RD$)</label>
+                                            <label class="block text-xs font-semibold mb-1">Precio Venta ({negocioConfig.moneda || 'RD$'})</label>
                                             <input
                                                 type="number"
                                                 value={productForm.venta}
