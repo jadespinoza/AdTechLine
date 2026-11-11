@@ -364,4 +364,431 @@
                                             <button
                                                 key={product.id}
                                                 onClick={() => addToCart(product)}
-                                                className="group relative bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-md hover:shadow
+                                                className="group relative bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition transform active:scale-95 border border-slate-200 dark:border-slate-700 flex flex-col text-left"
+                                            >
+                                                <div class="h-28 w-full overflow-hidden bg-slate-100 relative">
+                                                    <img src={product.img || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'} alt={product.nombre} class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                                    {product.esPlatoDia && (
+                                                        <span class="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow">Armar Plato</span>
+                                                    )}
+                                                </div>
+                                                <div class="p-3 flex flex-col justify-between flex-1 w-full">
+                                                    <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm line-clamp-1">{product.nombre}</span>
+                                                    <div class="flex justify-between items-center mt-2">
+                                                        <span class="text-xs font-semibold text-sky-600 dark:text-sky-400">
+                                                            {negocioConfig.moneda || 'RD$'} {product.esPlatoDia ? menuDiaConfig.precioBase.toFixed(2) : product.venta.toFixed(2)}
+                                                        </span>
+                                                        <span class="bg-sky-50 dark:bg-slate-700 text-sky-600 dark:text-sky-300 p-1.5 rounded-lg group-hover:bg-sky-500 group-hover:text-white transition">
+                                                            <Icon name="plus" size={14} />
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div class="lg:col-span-5 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-5 flex flex-col justify-between">
+                                    <div class="space-y-4">
+                                        <div class="border-b border-slate-200 dark:border-slate-700 pb-4 space-y-3">
+                                            <div class="flex justify-between items-center">
+                                                <h2 class="font-bold text-lg text-slate-800 dark:text-slate-100">Detalle de Factura</h2>
+                                                {cart.length > 0 && (
+                                                    <button
+                                                        onClick={handleClearInvoice}
+                                                        className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-800 transition flex items-center gap-1 shadow-sm"
+                                                    >
+                                                        <Icon name="trash-2" size={14} />
+                                                        <span>Borrar Factura</span>
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <div class="flex justify-between items-center mb-1">
+                                                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400">Cliente</label>
+                                                    <button onClick={() => setShowClientModal(true)} className="text-[11px] text-sky-600 hover:underline font-bold">
+                                                        + Verificar / Nuevo Cliente
+                                                    </button>
+                                                </div>
+                                                <select
+                                                    value={selectedClient}
+                                                    onChange={e => setSelectedClient(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                                >
+                                                    {clients.map(c => (
+                                                        <option key={c.id} value={c.id}>{c.nombre} {c.rnc ? `(${c.rnc})` : ''}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+
+                                            <div class="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Forma de Pago</label>
+                                                    <select
+                                                        value={paymentMethod}
+                                                        onChange={e => setPaymentMethod(e.target.value)}
+                                                        className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                                    >
+                                                        <option value="Efectivo">Efectivo</option>
+                                                        <option value="Tarjeta">Tarjeta</option>
+                                                        <option value="Transferencia">Transferencia</option>
+                                                        <option value="Credito">A Crédito (CxC)</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">NCF / Comprobante</label>
+                                                    <select
+                                                        value={ncfType}
+                                                        onChange={e => setNcfType(e.target.value)}
+                                                        className="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                                    >
+                                                        <option value="B02">B02 Consumidor Final</option>
+                                                        <option value="B01">B01 Crédito Fiscal</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="max-h-60 overflow-y-auto space-y-2 pr-1">
+                                            {cart.length === 0 ? (
+                                                <div class="text-center py-8 text-slate-400 text-sm">No hay items agregados a la factura</div>
+                                            ) : (
+                                                cart.map((item, idx) => (
+                                                    <div key={idx} class="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-sm">
+                                                        <div class="flex-1 pr-2">
+                                                            <div class="font-medium text-slate-800 dark:text-slate-200">{item.nombre}</div>
+                                                            <div class="text-xs text-slate-400">{negocioConfig.moneda || 'RD$'} {item.precio.toFixed(2)} c/u</div>
+                                                        </div>
+                                                        <div class="flex items-center space-x-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    if (item.cantidad > 1) {
+                                                                        setCart(cart.map(c => c.id === item.id ? { ...c, cantidad: c.cantidad - 1 } : c));
+                                                                    } else {
+                                                                        setCart(cart.filter(c => c.id !== item.id));
+                                                                    }
+                                                                }}
+                                                                className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center"
+                                                            >-</button>
+                                                            <span class="font-semibold px-1">{item.cantidad}</span>
+                                                            <button
+                                                                onClick={() => setCart(cart.map(c => c.id === item.id ? { ...c, cantidad: c.cantidad + 1 } : c))}
+                                                                className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center"
+                                                            >+</button>
+                                                        </div>
+                                                        <div class="w-16 text-right font-semibold text-slate-700 dark:text-slate-200">
+                                                            {negocioConfig.moneda || 'RD$'} {(item.precio * item.cantidad).toFixed(2)}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4 space-y-2">
+                                        <div class="flex justify-between text-xs text-slate-500">
+                                            <span>Subtotal</span>
+                                            <span>{negocioConfig.moneda || 'RD$'} {subtotal.toFixed(2)}</span>
+                                        </div>
+                                        <div class="flex justify-between text-xs text-slate-500">
+                                            <span>ITBIS ({itbisRate}%)</span>
+                                            <span>{negocioConfig.moneda || 'RD$'} {itbis.toFixed(2)}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-xs text-slate-500">
+                                            <span>Descuento (%)</span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                value={discount}
+                                                onChange={e => setDiscount(Number(e.target.value))}
+                                                className="w-14 text-right bg-slate-100 dark:bg-slate-700 border rounded px-1 py-0.5 text-xs"
+                                            />
+                                        </div>
+                                        <div class="flex justify-between text-lg font-black text-slate-800 dark:text-slate-100 pt-2 border-t">
+                                            <span>TOTAL</span>
+                                            <span class="text-sky-600 dark:text-sky-400">{negocioConfig.moneda || 'RD$'} {total.toFixed(2)}</span>
+                                        </div>
+
+                                        <button
+                                            onClick={handleFacturar}
+                                            className="w-full mt-3 bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2"
+                                        >
+                                            <Icon name="printer" size={18} />
+                                            <span>Generar Factura</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 2: MÓDULO DE COMPRAS (INTEGRADO) */}
+                        {activeTab === 'compras' && (
+                            <ComprasModulo />
+                        )}
+
+                        {/* TAB 3: MENÚ DEL DÍA */}
+                        {activeTab === 'menudia' && (
+                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-4xl mx-auto">
+                                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
+                                    <div>
+                                        <h2 class="text-xl font-bold">Gestión de Menú del Día & Disponibilidad</h2>
+                                        <p class="text-xs text-slate-500">Active o desactive los acompañamientos y carnes disponibles para el día seleccionado.</p>
+                                    </div>
+                                    <div class="flex items-center space-x-2">
+                                        <label class="text-xs font-semibold">Fecha del Menú:</label>
+                                        <input
+                                            type="date"
+                                            value={menuDate}
+                                            onChange={e => setMenuDate(e.target.value)}
+                                            className="bg-slate-50 dark:bg-slate-700 border rounded p-2 text-sm font-bold"
+                                        />
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Arroces */}
+                                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border space-y-3">
+                                        <div class="flex justify-between items-center">
+                                            <h3 class="font-bold text-sm text-sky-600 uppercase tracking-wider">Arroces / Principales</h3>
+                                        </div>
+                                        <div class="space-y-2">
+                                            {menuDiaConfig.arroces.map(item => (
+                                                <div key={item.id} class="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
+                                                    <span class="text-sm font-medium">{item.nombre}</span>
+                                                    <label class="flex items-center space-x-1 cursor-pointer text-xs">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={item.disponible}
+                                                            onChange={e => {
+                                                                const updated = menuDiaConfig.arroces.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
+                                                                setMenuDiaConfig({ ...menuDiaConfig, arroces: updated });
+                                                            }}
+                                                            class="w-4 h-4 text-sky-600 rounded"
+                                                        />
+                                                        <span class={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
+                                                            {item.disponible ? 'Disponible' : 'Agotado'}
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    {/* Carnes */}
+                                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border space-y-3">
+                                        <div class="flex justify-between items-center">
+                                            <h3 class="font-bold text-sm text-sky-600 uppercase tracking-wider">Carnes Disponibles</h3>
+                                        </div>
+                                        <div class="space-y-2">
+                                            {menuDiaConfig.carnes.map(item => (
+                                                <div key={item.id} class="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
+                                                    <span class="text-sm font-medium">{item.nombre}</span>
+                                                    <label class="flex items-center space-x-1 cursor-pointer text-xs">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={item.disponible}
+                                                            onChange={e => {
+                                                                const updated = menuDiaConfig.carnes.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
+                                                                setMenuDiaConfig({ ...menuDiaConfig, carnes: updated });
+                                                            }}
+                                                            class="w-4 h-4 text-sky-600 rounded"
+                                                        />
+                                                        <span class={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
+                                                            {item.disponible ? 'Disponible' : 'Agotado'}
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 4: INVENTARIO */}
+                        {activeTab === 'inventory' && (
+                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
+                                <div class="flex justify-between items-center">
+                                    <h2 class="text-xl font-bold">Inventario & Productos</h2>
+                                    <button
+                                        onClick={openNewProductModal}
+                                        className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2 shadow"
+                                    >
+                                        <Icon name="plus" size={16} />
+                                        <span>Nuevo Producto</span>
+                                    </button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left text-sm">
+                                        <thead class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                            <tr>
+                                                <th class="p-3">Producto</th>
+                                                <th class="p-3">Categoría</th>
+                                                <th class="p-3">Precio Costo</th>
+                                                <th class="p-3">Precio Venta</th>
+                                                <th class="p-3">Stock</th>
+                                                <th class="p-3 text-center">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                                            {products.map(p => (
+                                                <tr key={p.id}>
+                                                    <td class="p-3 font-medium flex items-center space-x-3">
+                                                        <img src={p.img || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'} class="w-10 h-10 object-cover rounded-lg border bg-slate-100" />
+                                                        <span>{p.nombre}</span>
+                                                    </td>
+                                                    <td class="p-3">{p.categoria}</td>
+                                                    <td class="p-3">{negocioConfig.moneda || 'RD$'} {(p.costo || p.precioCosto || 0).toFixed(2)}</td>
+                                                    <td class="p-3">{negocioConfig.moneda || 'RD$'} {(p.venta || p.precioVenta || 0).toFixed(2)}</td>
+                                                    <td class="p-3 font-bold text-sky-600">{p.stock || 10}</td>
+                                                    <td class="p-3 text-center space-x-2">
+                                                        <button onClick={() => openEditProductModal(p)} className="text-sky-500 bg-sky-50 dark:bg-slate-700 p-1.5 rounded-lg">
+                                                            <Icon name="edit" size={16} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 5: CLIENTES & CXC */}
+                        {activeTab === 'clients' && (
+                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
+                                <div class="flex justify-between items-center">
+                                    <h2 class="text-xl font-bold">Administración de Clientes & CxC</h2>
+                                    <button onClick={() => setShowClientModal(true)} className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm shadow">
+                                        + Registrar Cliente (DGII)
+                                    </button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left text-sm">
+                                        <thead class="bg-slate-100 dark:bg-slate-700">
+                                            <tr>
+                                                <th class="p-3">Nombre</th>
+                                                <th class="p-3">RNC / Cédula</th>
+                                                <th class="p-3">Saldo CxC</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                                            {clients.map(c => (
+                                                <tr key={c.id}>
+                                                    <td class="p-3 font-medium">{c.nombre}</td>
+                                                    <td class="p-3">{c.rnc || 'N/A'}</td>
+                                                    <td class="p-3 text-amber-600 font-bold">{negocioConfig.moneda || 'RD$'} {(c.cxc || 0).toFixed(2)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 6: PROVEEDORES & CXP */}
+                        {activeTab === 'suppliers' && (
+                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
+                                <div class="flex justify-between items-center">
+                                    <h2 class="text-xl font-bold">Proveedores & CxP</h2>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left text-sm">
+                                        <thead class="bg-slate-100 dark:bg-slate-700">
+                                            <tr>
+                                                <th class="p-3">Proveedor</th>
+                                                <th class="p-3">RNC</th>
+                                                <th class="p-3">Cuentas por Pagar (CxP)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                                            {suppliers.map(s => (
+                                                <tr key={s.id}>
+                                                    <td class="p-3 font-medium">{s.nombre}</td>
+                                                    <td class="p-3">{s.rnc}</td>
+                                                    <td class="p-3 text-red-500 font-bold">{negocioConfig.moneda || 'RD$'} {s.cxp.toFixed(2)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 7: CONFIGURACIÓN & DATOS */}
+                        {activeTab === 'config' && (
+                            <div class="space-y-6">
+                                <div class="flex justify-center border-b border-slate-200 dark:border-slate-700 max-w-md mx-auto">
+                                    <button onClick={() => setConfigSubTab('general')} className={`px-6 py-2.5 font-bold text-sm border-b-2 ${configSubTab === 'general' ? 'border-sky-500 text-sky-600' : 'border-transparent text-slate-500'}`}>
+                                        ⚙️ Datos del Negocio
+                                    </button>
+                                    <button onClick={() => setConfigSubTab('datos')} className={`px-6 py-2.5 font-bold text-sm border-b-2 ${configSubTab === 'datos' ? 'border-sky-500 text-sky-600' : 'border-transparent text-slate-500'}`}>
+                                        📊 Almacenamiento & Respaldos
+                                    </button>
+                                </div>
+
+                                {configSubTab === 'general' ? (
+                                    <ConfiguracionGeneral config={negocioConfig} setConfig={setNegocioConfig} theme={theme} setTheme={setTheme} itbisRate={itbisRate} setItbisRate={setItbisRate} />
+                                ) : (
+                                    <ConfiguracionDatos />
+                                )}
+                            </div>
+                        )}
+                    </main>
+
+                    {/* MODALES AUXILIARES */}
+                    {showPlatoModal && (
+                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+                                <div class="flex justify-between items-center border-b pb-3">
+                                    <h3 class="text-lg font-bold">Armar Plato del Día</h3>
+                                    <button onClick={() => setShowPlatoModal(false)}><Icon name="x" size={20} /></button>
+                                </div>
+                                <button onClick={handleAddPlatoDia} class="w-full bg-sky-500 text-white font-bold py-3 rounded-xl">Agregar al Carrito</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {showReceipt && lastInvoice && (
+                        <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div class="bg-white text-slate-900 rounded-xl max-w-sm w-full p-6 shadow-2xl font-mono text-xs">
+                                <div id="printable-receipt" class="space-y-3 border p-4 rounded bg-slate-50">
+                                    <div class="text-center">
+                                        <h2 class="text-base font-black uppercase">{negocioConfig.nombreNegocio}</h2>
+                                        <p>RNC: {negocioConfig.rnc}</p>
+                                        <p class="mt-2 font-bold">{lastInvoice.ncf}</p>
+                                    </div>
+                                    <div class="border-b border-t border-dashed border-slate-400 py-2 space-y-1">
+                                        <p><strong>Cliente:</strong> {lastInvoice.cliente}</p>
+                                    </div>
+                                    <div class="border-t border-dashed border-slate-400 pt-2 text-right">
+                                        <div class="flex justify-between text-sm font-black">
+                                            <span>TOTAL:</span>
+                                            <span>{negocioConfig.moneda || 'RD$'} {lastInvoice.total.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-4 flex space-x-2">
+                                    <button onClick={() => window.print()} class="flex-1 bg-sky-500 text-white py-2 rounded-lg font-bold">Imprimir</button>
+                                    <button onClick={() => setShowReceipt(false)} class="flex-1 bg-slate-200 text-slate-800 py-2 rounded-lg font-bold">Cerrar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showClientModal && (
+                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                            <div class="my-8 w-full max-w-2xl">
+                                <ClienteFormulario onGuardarCliente={handleGuardarNuevoCliente} onCancelar={() => setShowClientModal(false)} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
