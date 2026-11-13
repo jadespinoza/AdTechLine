@@ -104,35 +104,46 @@
             // Fecha actual del menú
             const [menuDate, setMenuDate] = useState(new Date().toISOString().split('T')[0]);
 
-            // Elementos disponibles para el Menú del Día
+            // Menú del Día Dinámico y Modificable
             const [menuDiaConfig, setMenuDiaConfig] = useState(() => {
                 const saved = localStorage.getItem('adtech_menu_dia_config');
-                return saved ? JSON.parse(saved) : {
-                    arroces: [
-                        { id: 'ar1', nombre: 'Arroz blanco', disponible: true },
-                        { id: 'ar2', nombre: 'Arroz Moro', disponible: true },
-                        { id: 'ar3', nombre: 'Arroz Amarillo', disponible: true },
-                        { id: 'ar4', nombre: 'Locrio', disponible: true }
-                    ],
-                    carnes: [
-                        { id: 'c1', nombre: 'Pollo frito', disponible: true },
-                        { id: 'c2', nombre: 'Pollo guisado', disponible: true },
-                        { id: 'c3', nombre: 'Cerdo', disponible: true },
-                        { id: 'c4', nombre: 'Costilla', disponible: true },
-                        { id: 'c5', nombre: 'Chuleta', disponible: true },
-                        { id: 'c6', nombre: 'Res', disponible: false }
-                    ],
-                    ensaladas: [
-                        { id: 'e1', nombre: 'Verde', disponible: true },
-                        { id: 'e2', nombre: 'Rusa', disponible: true },
-                        { id: 'e3', nombre: 'Colleslaw', disponible: true }
-                    ],
-                    extras: [
-                        { id: 'x1', nombre: 'Plátano frito', disponible: true },
-                        { id: 'x2', nombre: 'Arepa frita', disponible: true },
-                        { id: 'x3', nombre: 'Berenjena', disponible: true }
-                    ],
-                    precioBase: 200
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // Si ya tiene submenusDinamicos, retornarlo
+                    if (parsed.submenusDinamicos) return parsed;
+                }
+                // Estructura por defecto con submenús dinámicos totalmente editables
+                return {
+                    precioBase: 200,
+                    submenusDinamicos: {
+                        arroces: {
+                            titulo: 'Arroz / Principal',
+                            elementos: [
+                                { id: 'ar1', nombre: 'Arroz blanco', disponible: true },
+                                { id: 'ar2', nombre: 'Arroz Moro', disponible: true },
+                                { id: 'ar3', nombre: 'Arroz Amarillo', disponible: true },
+                                { id: 'ar4', nombre: 'Locrio', disponible: true }
+                            ]
+                        },
+                        carnes: {
+                            titulo: 'Carnes',
+                            elementos: [
+                                { id: 'c1', nombre: 'Pollo frito', disponible: true },
+                                { id: 'c2', nombre: 'Pollo guisado', disponible: true },
+                                { id: 'c3', nombre: 'Cerdo', disponible: true },
+                                { id: 'c4', nombre: 'Costilla', disponible: true },
+                                { id: 'c5', nombre: 'Chuleta', disponible: true },
+                                { id: 'c6', nombre: 'Res', disponible: true }
+                            ]
+                        },
+                        ensaladas: {
+                            titulo: 'Ensaladas',
+                            elementos: [
+                                { id: 'e1', nombre: 'Verde', disponible: true },
+                                { id: 'e2', nombre: 'Rusa', disponible: true }
+                            ]
+                        }
+                    }
                 };
             });
 
@@ -152,25 +163,8 @@
                         esPlatoDia: true, 
                         tieneSubmenu: true, 
                         precioEditable: true,
-                        submenus: ['arroces', 'carnes', 'ensaladas', 'extras'],
-                        opcionesPermitidas: [],
                         disponible: true, 
                         img: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300' 
-                    },
-                    { 
-                        id: '5', 
-                        nombre: 'Porción', 
-                        costo: 50, 
-                        venta: 100, 
-                        stock: 50,
-                        controlarStock: false,
-                        categoria: 'Platos', 
-                        tieneSubmenu: true, 
-                        precioEditable: true,
-                        submenus: ['arroces', 'carnes'],
-                        opcionesPermitidas: ['Arroz blanco', 'Arroz Moro', 'Pollo frito', 'Pollo guisado'],
-                        disponible: true, 
-                        img: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=300' 
                     },
                     { id: '3', nombre: 'Jugo Natural Chinola', costo: 30, venta: 60, stock: 15, controlarStock: true, categoria: 'Bebidas', disponible: true, tieneSubmenu: false, precioEditable: false, img: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=300' }
                 ];
@@ -202,13 +196,7 @@
             // Modales de Submenú & Productos
             const [showPlatoModal, setShowPlatoModal] = useState(false);
             const [activeSubmenuProduct, setActiveSubmenuProduct] = useState(null);
-            const [platoConfig, setPlatoConfig] = useState({
-                principal: '',
-                carne: '',
-                ensalada: '',
-                extra: '',
-                precio: 200
-            });
+            const [platoConfig, setPlatoConfig] = useState({});
 
             const [showReceipt, setShowReceipt] = useState(false);
             const [lastInvoice, setLastInvoice] = useState(null);
@@ -216,7 +204,6 @@
             // Modales de Administración
             const [showClientModal, setShowClientModal] = useState(false);
             const [showSupplierModal, setShowSupplierModal] = useState(false);
-            const [newSupplier, setNewSupplier] = useState({ nombre: '', rnc: '' });
             
             // Estado para Nuevo / Editar Producto
             const [showProductModal, setShowProductModal] = useState(false);
@@ -230,9 +217,7 @@
                 categoria: 'Platos',
                 img: '',
                 tieneSubmenu: false,
-                precioEditable: false,
-                submenus: ['arroces', 'carnes', 'ensaladas', 'extras'],
-                opcionesPermitidas: []
+                precioEditable: false
             });
 
             // Persistencia
@@ -257,7 +242,6 @@
                 localStorage.setItem('adtech_menu_dia_config', JSON.stringify(menuDiaConfig));
             }, [menuDiaConfig]);
 
-            // Sincronizar inventario cuando se actualice desde compras
             const handleInventarioActualizado = (nuevoInventario) => {
                 setProducts(nuevoInventario);
             };
@@ -282,31 +266,26 @@
                 }
             };
 
-            // Lógica Submenú Dinámico
-            const isLocrio = platoConfig.principal && platoConfig.principal.toLowerCase().includes('locrio');
-
+            // Lógica Submenú Dinámico para Plato del Día
             const handleAddPlatoDia = () => {
                 if (!activeSubmenuProduct) return;
-                const hasAnySelection = platoConfig.principal || platoConfig.carne || platoConfig.ensalada || platoConfig.extra;
-                if (!hasAnySelection) {
-                    return alert('Por favor seleccione al menos un elemento para la porción.');
+                
+                let detalles = [];
+                Object.entries(platoConfig).forEach(([key, val]) => {
+                    if (val) detalles.push(val);
+                });
+
+                if (detalles.length === 0) {
+                    return alert('Por favor seleccione al menos una opción para el plato.');
                 }
 
-                let detalles = [];
-                if (platoConfig.principal) detalles.push(platoConfig.principal);
-                if (platoConfig.carne && !isLocrio) detalles.push(platoConfig.carne);
-                if (platoConfig.ensalada) detalles.push(`Ensalada: ${platoConfig.ensalada}`);
-                if (platoConfig.extra) detalles.push(`Extra: ${platoConfig.extra}`);
-
-                const desc = detalles.length === 1 
-                    ? `${activeSubmenuProduct.nombre} de ${detalles[0]}` 
-                    : `${activeSubmenuProduct.nombre} (${menuDate}): ${detalles.join(', ')}`;
+                const desc = `${activeSubmenuProduct.nombre} (${menuDate}): ${detalles.join(', ')}`;
                 
                 const item = {
                     id: 'custom-' + Date.now(),
                     productId: activeSubmenuProduct.id,
                     nombre: desc,
-                    precio: Number(platoConfig.precio) || activeSubmenuProduct.venta,
+                    precio: Number(platoConfig.precio) || (activeSubmenuProduct.esPlatoDia ? menuDiaConfig.precioBase : activeSubmenuProduct.venta),
                     cantidad: 1,
                     esCustom: true,
                     controlarStock: activeSubmenuProduct.controlarStock
@@ -319,26 +298,18 @@
                 const usaSubmenu = product.tieneSubmenu || product.esPlatoDia;
 
                 if (usaSubmenu) {
-                    const subs = product.submenus || ['arroces', 'carnes', 'ensaladas', 'extras'];
-                    const permitidas = product.opcionesPermitidas || [];
-                    const filtrar = (lista) => lista.filter(i => i.disponible && (permitidas.length === 0 || permitidas.includes(i.nombre)));
-
-                    const dispArroces = filtrar(menuDiaConfig.arroces);
-                    const precioInicial = product.esPlatoDia ? menuDiaConfig.precioBase : product.venta;
-
-                    setActiveSubmenuProduct({ ...product, submenus: subs, opcionesPermitidas: permitidas });
-                    setPlatoConfig({
-                        principal: subs.includes('arroces') ? (dispArroces[0]?.nombre || '') : '',
-                        carne: '',
-                        ensalada: '',
-                        extra: '',
-                        precio: precioInicial
-                    });
+                    setActiveSubmenuProduct(product);
+                    const initialConfig = { precio: product.esPlatoDia ? menuDiaConfig.precioBase : product.venta };
+                    if (menuDiaConfig.submenusDinamicos) {
+                        Object.keys(menuDiaConfig.submenusDinamicos).forEach(k => {
+                            initialConfig[k] = '';
+                        });
+                    }
+                    setPlatoConfig(initialConfig);
                     setShowPlatoModal(true);
                     return;
                 }
 
-                // Control estricto de existencia (stock)
                 if (product.controlarStock && (product.stock || 0) <= 0) {
                     return alert(`El producto "${product.nombre}" está agotado en inventario.`);
                 }
@@ -372,15 +343,6 @@
                 }
             };
 
-            const handleImageFileChange = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => setProductForm(prev => ({ ...prev, img: reader.result }));
-                    reader.readAsDataURL(file);
-                }
-            };
-
             const openNewProductModal = () => {
                 setEditingProductId(null);
                 setProductForm({
@@ -392,9 +354,7 @@
                     categoria: 'Platos',
                     img: '',
                     tieneSubmenu: false,
-                    precioEditable: false,
-                    submenus: ['arroces', 'carnes'],
-                    opcionesPermitidas: []
+                    precioEditable: false
                 });
                 setShowProductModal(true);
             };
@@ -410,9 +370,7 @@
                     categoria: prod.categoria || 'Bebidas',
                     img: prod.img || '',
                     tieneSubmenu: prod.tieneSubmenu || prod.esPlatoDia || false,
-                    precioEditable: prod.precioEditable || prod.esPlatoDia || false,
-                    submenus: prod.submenus || ['arroces', 'carnes', 'ensaladas', 'extras'],
-                    opcionesPermitidas: prod.opcionesPermitidas || []
+                    precioEditable: prod.precioEditable || prod.esPlatoDia || false
                 });
                 setShowProductModal(true);
             };
@@ -446,11 +404,9 @@
             const subtotal = total / (1 + (itbisRate / 100));
             const itbis = total - subtotal;
 
-            // Facturar y Descontar Stock Automáticamente
             const handleFacturar = () => {
                 if (cart.length === 0) return alert('El carrito está vacío');
                 
-                // Validar existencias antes de facturar
                 let inventoryUpdated = [...products];
                 for (let item of cart) {
                     if (item.productId) {
@@ -625,11 +581,12 @@
                     <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 flex space-x-4 overflow-x-auto">
                         {[
                             { id: 'pos', label: 'Facturación / POS', icon: 'shopping-cart' },
-                            { id: 'menudia', label: 'Menú del Día (Disponibilidad)', icon: 'utensils' },
+                            { id: 'menudia', label: 'Menú del Día (Dinámico)', icon: 'utensils' },
                             { id: 'inventory', label: 'Inventario & Productos', icon: 'grid' },
                             { id: 'clients', label: 'Clientes & CxC', icon: 'users' },
                             { id: 'suppliers', label: 'Proveedores & CxP', icon: 'truck' },
                             { id: 'compras', label: 'Compras', icon: 'package' },
+                            { id: 'config', label: 'Configuración', icon: 'settings' },
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -845,77 +802,9 @@
                             </div>
                         )}
 
-                        {/* TAB 2: MENÚ DEL DÍA */}
+                        {/* TAB 2: MENÚ DEL DÍA DINÁMICO */}
                         {activeTab === 'menudia' && (
-                            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-4xl mx-auto">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
-                                    <div>
-                                        <h2 className="text-xl font-bold">Gestión de Menú del Día & Disponibilidad</h2>
-                                        <p className="text-xs text-slate-500">Active o desactive los acompañamientos y carnes disponibles para el día seleccionado.</p>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <label className="text-xs font-semibold">Fecha del Menú:</label>
-                                        <input
-                                            type="date"
-                                            value={menuDate}
-                                            onChange={e => setMenuDate(e.target.value)}
-                                            className="bg-slate-50 dark:bg-slate-700 border rounded p-2 text-sm font-bold"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Arroces */}
-                                    <div className="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                                        <h3 className="font-bold text-sm text-sky-600 dark:text-sky-400 uppercase tracking-wider">Arroces / Principales</h3>
-                                        <div className="space-y-2">
-                                            {menuDiaConfig.arroces.map(item => (
-                                                <div key={item.id} className="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
-                                                    <span className="text-sm font-medium">{item.nombre}</span>
-                                                    <label className="flex items-center space-x-1 cursor-pointer text-xs">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={item.disponible}
-                                                            onChange={e => {
-                                                                const updated = menuDiaConfig.arroces.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
-                                                                setMenuDiaConfig({ ...menuDiaConfig, arroces: updated });
-                                                            }}
-                                                            className="w-4 h-4 text-sky-600 rounded"
-                                                        />
-                                                        <span className={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
-                                                            {item.disponible ? 'Disponible' : 'Agotado'}
-                                                        </span>
-                                                    </label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    {/* Carnes */}
-                                    <div className="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                                        <h3 className="font-bold text-sm text-sky-600 dark:text-sky-400 uppercase tracking-wider">Carnes Disponibles</h3>
-                                        <div className="space-y-2">
-                                            {menuDiaConfig.carnes.map(item => (
-                                                <div key={item.id} className="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
-                                                    <span className="text-sm font-medium">{item.nombre}</span>
-                                                    <label className="flex items-center space-x-1 cursor-pointer text-xs">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={item.disponible}
-                                                            onChange={e => {
-                                                                const updated = menuDiaConfig.carnes.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
-                                                                setMenuDiaConfig({ ...menuDiaConfig, carnes: updated });
-                                                            }}
-                                                            className="w-4 h-4 text-sky-600 rounded"
-                                                        />
-                                                        <span className={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
-                                                            {item.disponible ? 'Disponible' : 'Agotado'}
-                                                        </span>
-                                                    </label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                            <MenuDiaConfigModulo menuDiaConfig={menuDiaConfig} setMenuDiaConfig={setMenuDiaConfig} />
                         )}
 
                         {/* TAB 3: INVENTARIO & PRODUCTOS CON STOCK VISIBLE */}
@@ -1104,12 +993,12 @@
                             </div>
                         )}
 
-                        {/* TAB COMPRAS (SINCRONIZADO CON INVENTARIO) */}
+                        {/* TAB COMPRAS */}
                         {activeTab === 'compras' && (
                             <ComprasModulo onInventarioActualizado={handleInventarioActualizado} />
                         )}
 
-                        {/* TAB 6: CONFIGURACIÓN (DATOS + USUARIOS + RESPALDOS) */}
+                        {/* TAB 6: CONFIGURACIÓN */}
                         {activeTab === 'config' && (
                             <div className="space-y-6">
                                 <div className="flex justify-center border-b border-slate-200 dark:border-slate-700 max-w-xl mx-auto">
@@ -1163,28 +1052,31 @@
                         )}
                     </main>
 
-                    {/* MODAL CONFIGURADOR DE SUBMENÚ */}
+                    {/* MODAL CONFIGURADOR DE SUBMENÚ DINÁMICO */}
                     {showPlatoModal && activeSubmenuProduct && (
                         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
                                 <div className="flex justify-between items-center border-b pb-3">
-                                    <h3 className="text-lg font-bold">Configurar {activeSubmenuProduct.nombre}</h3>
+                                    <h3 className="text-lg font-bold">Armar {activeSubmenuProduct.nombre}</h3>
                                     <button onClick={() => setShowPlatoModal(false)} className="text-slate-400 hover:text-slate-600">
                                         <Icon name="x" size={20} />
                                     </button>
                                 </div>
 
-                                <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
-                                    {activeSubmenuProduct.submenus.includes('arroces') && (
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Arroz / Principal</label>
+                                <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
+                                    {menuDiaConfig.submenusDinamicos && Object.entries(menuDiaConfig.submenusDinamicos).map(([key, submenu]) => (
+                                        <div key={key} className="space-y-1">
+                                            <label className="block text-xs font-bold text-slate-500 uppercase">{submenu.titulo}</label>
                                             <div className="grid grid-cols-2 gap-2">
-                                                {menuDiaConfig.arroces.filter(a => a.disponible).map(item => (
+                                                {submenu.elementos.filter(e => e.disponible !== false).map(item => (
                                                     <button
                                                         key={item.id}
-                                                        onClick={() => setPlatoConfig({ ...platoConfig, principal: platoConfig.principal === item.nombre ? '' : item.nombre })}
-                                                        className={`p-2 text-xs rounded-lg border font-medium text-left ${
-                                                            platoConfig.principal === item.nombre ? 'border-sky-500 bg-sky-50 text-sky-600 font-bold' : 'border-slate-200'
+                                                        type="button"
+                                                        onClick={() => setPlatoConfig({ ...platoConfig, [key]: platoConfig[key] === item.nombre ? '' : item.nombre })}
+                                                        className={`p-2.5 text-xs rounded-lg border font-medium text-left transition ${
+                                                            platoConfig[key] === item.nombre 
+                                                                ? 'border-sky-500 bg-sky-50 text-sky-600 font-bold dark:bg-sky-900/40 dark:text-sky-300' 
+                                                                : 'border-slate-200 dark:border-slate-700'
                                                         }`}
                                                     >
                                                         {item.nombre}
@@ -1192,25 +1084,7 @@
                                                 ))}
                                             </div>
                                         </div>
-                                    )}
-                                    {activeSubmenuProduct.submenus.includes('carnes') && (
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Carnes</label>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                {menuDiaConfig.carnes.filter(c => c.disponible).map(item => (
-                                                    <button
-                                                        key={item.id}
-                                                        onClick={() => setPlatoConfig({ ...platoConfig, carne: platoConfig.carne === item.nombre ? '' : item.nombre })}
-                                                        className={`p-2 text-xs rounded-lg border font-medium text-center ${
-                                                            platoConfig.carne === item.nombre ? 'border-sky-500 bg-sky-50 text-sky-600 font-bold' : 'border-slate-200'
-                                                        }`}
-                                                    >
-                                                        {item.nombre}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                                    ))}
                                 </div>
 
                                 <button
@@ -1331,6 +1205,179 @@
                             </div>
                         </div>
                     )}
+                </div>
+            );
+        }
+
+        // Componente: Menú del Día Dinámico y Modificable
+        function MenuDiaConfigModulo({ menuDiaConfig, setMenuDiaConfig }) {
+            const [nuevoSubmenuNombre, setNuevoSubmenuNombre] = useState('');
+            const [nuevoElementoTextos, setNuevoElementoTextos] = useState({});
+
+            const guardarCambios = (updatedConfig) => {
+                setMenuDiaConfig(updatedConfig);
+                localStorage.setItem('adtech_menu_dia_config', JSON.stringify(updatedConfig));
+            };
+
+            const handleAgregarSubmenu = (e) => {
+                e.preventDefault();
+                if (!nuevoSubmenuNombre) return alert('Ingrese el nombre del nuevo submenú.');
+                const key = nuevoSubmenuNombre.toLowerCase().replace(/\s+/g, '_');
+                
+                if (menuDiaConfig.submenusDinamicos && menuDiaConfig.submenusDinamicos[key]) {
+                    return alert('Ya existe un submenú con ese nombre.');
+                }
+
+                const actualizado = {
+                    ...menuDiaConfig,
+                    submenusDinamicos: {
+                        ...(menuDiaConfig.submenusDinamicos || {}),
+                        [key]: {
+                            titulo: nuevoSubmenuNombre,
+                            elementos: []
+                        }
+                    }
+                };
+
+                guardarCambios(actualizado);
+                setNuevoSubmenuNombre('');
+            };
+
+            const handleAgregarElemento = (key) => {
+                const texto = nuevoElementoTextos[key];
+                if (!texto) return alert('Escriba el nombre del elemento a agregar.');
+
+                const submenusActuales = menuDiaConfig.submenusDinamicos || {};
+                const targetSubmenu = submenusActuales[key];
+                
+                const nuevoElemento = {
+                    id: 'elem-' + Date.now(),
+                    nombre: texto,
+                    disponible: true
+                };
+
+                targetSubmenu.elementos.push(nuevoElemento);
+
+                guardarCambios({
+                    ...menuDiaConfig,
+                    submenusDinamicos: submenusActuales
+                });
+
+                setNuevoElementoTextos({ ...nuevoElementoTextos, [key]: '' });
+            };
+
+            const handleEliminarElemento = (key, elemId) => {
+                const submenusActuales = menuDiaConfig.submenusDinamicos || {};
+                submenusActuales[key].elementos = submenusActuales[key].elementos.filter(e => e.id !== elemId);
+                guardarCambios({ ...menuDiaConfig, submenusDinamicos: submenusActuales });
+            };
+
+            const handleEliminarSubmenu = (key) => {
+                if (confirm('¿Está seguro de eliminar todo este submenú?')) {
+                    const submenusActuales = menuDiaConfig.submenusDinamicos || {};
+                    delete submenusActuales[key];
+                    guardarCambios({ ...menuDiaConfig, submenusDinamicos: submenusActuales });
+                }
+            };
+
+            return (
+                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-4xl mx-auto">
+                    <div className="flex justify-between items-center border-b pb-4">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-800 dark:text-white">🍽️ Configuración Dinámica del Menú del Día</h2>
+                            <p className="text-xs text-slate-500">Crea nuevos submenús, modifica títulos y administra elementos personalizados.</p>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">Precio Base Plato del Día:</label>
+                            <input
+                                type="number"
+                                value={menuDiaConfig.precioBase || 200}
+                                onChange={e => guardarCambios({ ...menuDiaConfig, precioBase: Number(e.target.value) })}
+                                className="w-32 p-2 bg-slate-50 dark:bg-slate-700 border rounded font-bold text-sky-600 text-sm"
+                            />
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleAgregarSubmenu} className="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border flex flex-col sm:flex-row gap-3 items-end">
+                        <div className="flex-1 w-full">
+                            <label className="block text-xs font-semibold mb-1">Nombre del Nuevo Submenú (Ej. Postres, Sopas, Jugos)</label>
+                            <input
+                                type="text"
+                                placeholder="Nombre de la categoría..."
+                                value={nuevoSubmenuNombre}
+                                onChange={e => setNuevoSubmenuNombre(e.target.value)}
+                                className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm"
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            className="bg-sky-500 hover:bg-sky-600 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition whitespace-nowrap shadow"
+                        >
+                            + Crear Submenú
+                        </button>
+                    </form>
+
+                    <div className="space-y-6">
+                        {menuDiaConfig.submenusDinamicos && Object.keys(menuDiaConfig.submenusDinamicos).length > 0 ? (
+                            Object.entries(menuDiaConfig.submenusDinamicos).map(([key, submenu]) => (
+                                <div key={key} className="bg-slate-50 dark:bg-slate-700/30 p-5 rounded-xl border border-slate-200 dark:border-slate-700 space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <input
+                                            type="text"
+                                            value={submenu.titulo}
+                                            onChange={e => {
+                                                const submenusActuales = menuDiaConfig.submenusDinamicos;
+                                                submenusActuales[key].titulo = e.target.value;
+                                                guardarCambios({ ...menuDiaConfig, submenusDinamicos: submenusActuales });
+                                            }}
+                                            className="font-bold text-base bg-transparent border-b border-dashed border-sky-400 focus:outline-none text-sky-600 dark:text-sky-400"
+                                        />
+                                        <button
+                                            onClick={() => handleEliminarSubmenu(key)}
+                                            className="text-rose-500 hover:text-rose-700 text-xs font-bold bg-rose-50 dark:bg-slate-700 px-2.5 py-1 rounded"
+                                        >
+                                            Eliminar Submenú
+                                        </button>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder={`Agregar opción en ${submenu.titulo}...`}
+                                            value={nuevoElementoTextos[key] || ''}
+                                            onChange={e => setNuevoElementoTextos({ ...nuevoElementoTextos, [key]: e.target.value })}
+                                            className="flex-1 p-2 bg-white dark:bg-slate-800 border rounded-lg text-sm"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAgregarElemento(key)}
+                                            className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-4 py-2 rounded-lg text-sm shadow"
+                                        >
+                                            + Agregar
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-2">
+                                        {submenu.elementos && submenu.elementos.map(elem => (
+                                            <div key={elem.id} className="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border shadow-sm">
+                                                <span className="text-sm font-medium">{elem.nombre}</span>
+                                                <button
+                                                    onClick={() => handleEliminarElemento(key, elem.id)}
+                                                    className="text-rose-500 hover:text-rose-700 font-bold text-xs"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-8 text-slate-400 text-sm">
+                                No hay submenús dinámicos creados. Utiliza el formulario superior para agregar categorías.
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         }
