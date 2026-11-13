@@ -1,7 +1,12 @@
 // Componente ComprasModulo - Registro de Compras, Artículos, Importación por Foto (OCR) y Sentencia SQL
-function ComprasModulo() {
+function ComprasModulo({ onInventarioActualizado }) {
     const [compras, setCompras] = React.useState(() => {
         const saved = localStorage.getItem('adtech_compras');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    const [productosInventario, setProductosInventario] = React.useState(() => {
+        const saved = localStorage.getItem('adtech_products');
         return saved ? JSON.parse(saved) : [];
     });
 
@@ -25,16 +30,58 @@ function ComprasModulo() {
         localStorage.setItem('adtech_compras', JSON.stringify(compras));
     }, [compras]);
 
+    React.useEffect(() => {
+        const saved = localStorage.getItem('adtech_products');
+        if (saved) setProductosInventario(JSON.parse(saved));
+    }, []);
+
+    const sincronizarInventarioPorCompra = (listaArticulos) => {
+        try {
+            const productosActuales = JSON.parse(localStorage.getItem('adtech_products') || '[]');
+            listaArticulos.forEach(art => {
+                const nombreNormalizado = art.descripcion.trim().toLowerCase();
+                const prodExistente = productosActuales.find(p => p.nombre.trim().toLowerCase() === nombreNormalizado);
+                if (prodExistente) {
+                    prodExistente.stock = (Number(prodExistente.stock) || 0) + Number(art.cantidad);
+                    prodExistente.costo = Number(art.costo);
+                    prodExistente.controlarStock = true;
+                    prodExistente.disponible = true;
+                } else {
+                    productosActuales.push({
+                        id: (Date.now() + Math.floor(Math.random() * 10000)).toString(),
+                        nombre: art.descripcion.trim(),
+                        costo: Number(art.costo),
+                        venta: Math.round(Number(art.costo) * 1.35),
+                        stock: Number(art.cantidad),
+                        controlarStock: true,
+                        categoria: 'General',
+                        disponible: true,
+                        tieneSubmenu: false,
+                        precioEditable: false,
+                        img: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'
+                    });
+                }
+            });
+            localStorage.setItem('adtech_products', JSON.stringify(productosActuales));
+            setProductosInventario(productosActuales);
+            if (typeof onInventarioActualizado === 'function') {
+                onInventarioActualizado(productosActuales);
+            }
+        } catch (err) {
+            console.error('Error al actualizar inventario desde compra:', err);
+        }
+    };
+
     const handleAgregarArticulo = (e) => {
         e.preventDefault();
-        if (!articuloActual.descripcion || articuloActual.costo <= 0) {
-            setMensaje({ texto: 'Ingrese una descripción válida y un costo mayor a 0.', tipo: 'error' });
+        if (!articuloActual.descripcion || Number(articuloActual.costo) <= 0 || Number(articuloActual.cantidad) <= 0) {
+            setMensaje({ texto: 'Ingrese una descripción válida, cantidad mayor a 0 y costo mayor a 0.', tipo: 'error' });
             return;
         }
 
         const nuevoItem = {
             id: Date.now(),
-            descripcion: articuloActual.descripcion,
+            descripcion: articuloActual.descripcion.trim(),
             cantidad: Number(articuloActual.cantidad),
             costo: Number(articuloActual.costo),
             subtotal: Number(articuloActual.cantidad) * Number(articuloActual.costo)
@@ -70,76 +117,49 @@ function ComprasModulo() {
         };
 
         setCompras([nuevaCompra, ...compras]);
-        
-        // Opcional: Actualizar inventario de productos automáticamente si existe adtech_productos
-        try {
-            const productosActuales = JSON.parse(localStorage.getItem('adtech_productos') || '[]');
-            articulosCompra.forEach(art => {
-                const prodExistente = productosActuales.find(p => p.nombre.toLowerCase() === art.descripcion.toLowerCase());
-                if (prodExistente) {
-                    prodExistente.stock = (Number(prodExistente.stock) || 0) + art.cantidad;
-                    prodExistente.precioCosto = art.costo;
-                } else {
-                    productosActuales.push({
-                        id: Date.now() + Math.random(),
-                        nombre: art.descripcion,
-                        precioCosto: art.costo,
-                        precioVenta: art.costo * 1.35, // Margen sugerido 35%
-                        stock: art.cantidad,
-                        categoria: 'General'
-                    });
-                }
-            });
-            localStorage.setItem('adtech_productos', JSON.stringify(productosActuales));
-        } catch (err) {
-            console.error('Error al actualizar inventario desde compra:', err);
-        }
+        sincronizarInventarioPorCompra(articulosCompra);
 
-        // Limpiar formulario
         setProveedor('');
         setNumFactura('');
         setNcf('');
         setArticulosCompra([]);
-        setMensaje({ texto: '¡Compra registrada e inventario actualizado con éxito!', tipo: 'success' });
+        setMensaje({ texto: '¡Compra registrada y stock actualizado con éxito!', tipo: 'success' });
         setTimeout(() => setMensaje({ texto: '', tipo: '' }), 4000);
     };
 
-    // 1. Simular carga de factura desde foto (OCR Inteligente)
     const handleSimularFotoOCR = (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // Simulamos el análisis OCR extrayendo datos de ejemplo de una factura comercial
         setTimeout(() => {
             setProveedor('Distribuidora Mayorista RD, S.R.L.');
             setNumFactura('B01000' + Math.floor(Math.random() * 8999 + 1000));
             setNcf('B0100034821');
             setArticulosCompra([
-                { id: 1, descripcion: 'Café Harina Industrial 10lb', cantidad: 5, costo: 1250, subtotal: 6250 },
-                { id: 2, descripcion: 'Azúcar Refinada Pote', cantidad: 10, costo: 110, subtotal: 1100 },
-                { id: 3, descripcion: 'Leche Evaporada Carnation', cantidad: 24, costo: 65, subtotal: 1560 }
+                { id: 1, descripcion: 'Coca-Cola', cantidad: 12, costo: 25, subtotal: 300 },
+                { id: 2, descripcion: 'Jugo Natural Chinola', cantidad: 10, costo: 30, subtotal: 300 }
             ]);
-            setMensaje({ texto: '¡Foto procesada con éxito por OCR! Datos de la factura extraídos automáticamente.', tipo: 'success' });
+            setMensaje({ texto: '¡Foto procesada con éxito por OCR! Revise los artículos y registre la compra.', tipo: 'success' });
             setShowFotoModal(false);
-        }, 1000);
+        }, 800);
     };
 
-    // 2. Procesar inserción por Sentencia SQL (Ej: INSERT INTO compras (...) VALUES (...))
     const handleEjecutarSql = (e) => {
         e.preventDefault();
         try {
-            // Analizador básico de INSERT SQL para extraer valores
-            // Ejemplo esperado: INSERT INTO compras (proveedor, factura, total) VALUES ('Ferretería X', 'F-001', 5000);
             if (!sqlQuery.toUpperCase().includes('INSERT')) {
                 throw new Error('La sentencia debe ser un comando INSERT válido.');
             }
 
-            // Extraer strings entre comillas o números
-            const matches = sqlQuery.match(/\['\"]([^\'\"]*)\['\"]|([\d\.]+)/g);
+            const matches = sqlQuery.match(/['"]([^'"]*)['"]|([\d\.]+)/g);
             if (matches && matches.length >= 2) {
-                const provSql = matches[0].replace(/['\"]/g, '');
-                const facSql = matches[1].replace(/['\"]/g, '');
+                const provSql = matches[0].replace(/['"]/g, '');
+                const facSql = matches[1].replace(/['"]/g, '');
                 const totalSql = Number(matches[2]) || 1500;
+
+                const articulosSql = [
+                    { id: Date.now(), descripcion: 'Artículo Importado vía SQL', cantidad: 1, costo: totalSql, subtotal: totalSql }
+                ];
 
                 const nuevaCompraSql = {
                     id: 'COMP-SQL-' + Date.now(),
@@ -147,18 +167,17 @@ function ComprasModulo() {
                     numFactura: facSql || 'SQL-999',
                     fecha: new Date().toISOString().slice(0, 10),
                     ncf: 'B0100099999',
-                    articulos: [
-                        { id: Date.now(), descripcion: 'Artículo Importado vía SQL', cantidad: 1, costo: totalSql, subtotal: totalSql }
-                    ],
+                    articulos: articulosSql,
                     total: totalSql
                 };
 
                 setCompras([nuevaCompraSql, ...compras]);
-                setMensaje({ texto: '¡Sentencia SQL ejecutada e insertada correctamente en el sistema!', tipo: 'success' });
+                sincronizarInventarioPorCompra(articulosSql);
+                setMensaje({ texto: '¡Sentencia SQL ejecutada e inventario actualizado!', tipo: 'success' });
                 setShowSqlModal(false);
                 setSqlQuery('');
             } else {
-                throw new Error('No se pudieron extraer los campos de la sentencia SQL. Verifique la sintaxis.');
+                throw new Error('No se pudieron extraer los campos de la sentencia SQL.');
             }
         } catch (err) {
             setMensaje({ texto: 'Error SQL: ' + err.message, tipo: 'error' });
@@ -167,14 +186,13 @@ function ComprasModulo() {
 
     return (
         <div className="max-w-6xl mx-auto space-y-6 pb-12">
-            {/* Cabecera y Botones de Accion Especial */}
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                        <span>📦</span> Módulo de Compras y Proveedores
+                        <span>📦</span> Compras
                     </h2>
                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                        Registra facturas de proveedores, alimenta tu inventario y utiliza herramientas avanzadas de importación.
+                        Selecciona o crea artículos para registrar facturas de proveedores y actualizar existencias.
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -204,7 +222,6 @@ function ComprasModulo() {
                 </div>
             )}
 
-            {/* Formulario Principal de Compra */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -259,17 +276,31 @@ function ComprasModulo() {
 
                         <hr className="border-slate-200 dark:border-slate-700 my-4" />
 
-                        {/* Agregar Artículos */}
                         <div>
-                            <h4 className="font-semibold text-slate-800 dark:text-white mb-3">Artículos Adquiridos</h4>
+                            <h4 className="font-semibold text-slate-800 dark:text-white mb-1">Artículos Adquiridos</h4>
+                            <p className="text-xs text-slate-500 mb-3">Selecciona un producto existente o escribe uno nuevo para registrarlo automáticamente en el inventario.</p>
                             <div className="flex flex-col md:flex-row gap-2 mb-4">
                                 <input 
                                     type="text"
-                                    placeholder="Descripción del artículo o producto"
+                                    list="productos-compras-datalist"
+                                    placeholder="Selecciona o escribe artículo..."
                                     value={articuloActual.descripcion}
-                                    onChange={(e) => setArticuloActual({...articuloActual, descripcion: e.target.value})}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        const match = productosInventario.find(p => p.nombre.toLowerCase() === val.toLowerCase());
+                                        setArticuloActual({
+                                            ...articuloActual,
+                                            descripcion: val,
+                                            costo: match ? match.costo : articuloActual.costo
+                                        });
+                                    }}
                                     className="flex-1 px-3 py-2 border rounded-lg dark:bg-slate-700 dark:border-slate-600 text-sm"
                                 />
+                                <datalist id="productos-compras-datalist">
+                                    {productosInventario.map(p => (
+                                        <option key={p.id} value={p.nombre} />
+                                    ))}
+                                </datalist>
                                 <input 
                                     type="number"
                                     min="1"
@@ -295,13 +326,12 @@ function ComprasModulo() {
                                 </button>
                             </div>
 
-                            {/* Tabla de Artículos de la Compra */}
                             <div className="overflow-x-auto border border-slate-200 dark:border-slate-700 rounded-lg">
                                 <table className="w-full text-left border-collapse text-sm">
                                     <thead className="bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300">
                                         <tr>
                                             <th className="p-3">Descripción</th>
-                                            <th className="p-3 text-center">Cant</th>
+                                            <th className="p-3 text-center">Cant (+Stock)</th>
                                             <th className="p-3 text-right">Costo Unit.</th>
                                             <th className="p-3 text-right">Subtotal</th>
                                             <th className="p-3 text-center">Acción</th>
@@ -315,8 +345,8 @@ function ComprasModulo() {
                                         ) : (
                                             articulosCompra.map(item => (
                                                 <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                                                    <td className="p-3 text-slate-800 dark:text-white">{item.descripcion}</td>
-                                                    <td className="p-3 text-center text-slate-600 dark:text-slate-300">{item.cantidad}</td>
+                                                    <td className="p-3 text-slate-800 dark:text-white font-medium">{item.descripcion}</td>
+                                                    <td className="p-3 text-center text-emerald-600 font-bold">+{item.cantidad}</td>
                                                     <td className="p-3 text-right text-slate-600 dark:text-slate-300">RD$ {item.costo.toFixed(2)}</td>
                                                     <td className="p-3 text-right font-semibold text-slate-800 dark:text-white">RD$ {item.subtotal.toFixed(2)}</td>
                                                     <td className="p-3 text-center">
@@ -341,13 +371,12 @@ function ComprasModulo() {
                                 type="submit"
                                 className="bg-sky-500 hover:bg-sky-600 text-white px-6 py-2.5 rounded-lg font-semibold transition shadow-md flex items-center gap-2"
                             >
-                                <span>💾</span> Registrar Compra Final e Inventario
+                                <span>💾</span> Registrar Compra y Actualizar Existencias
                             </button>
                         </div>
                     </form>
                 </div>
 
-                {/* Resumen y Historial Reciente de Compras */}
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 space-y-4">
                     <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
                         <span>📊</span> Historial de Compras
@@ -367,7 +396,7 @@ function ComprasModulo() {
                                         <span>{c.fecha}</span>
                                     </div>
                                     <div className="text-xs text-slate-400 pt-1">
-                                        {c.articulos.length} artículo(s) registrado(s)
+                                        {c.articulos.map(a => `${a.cantidad}x ${a.descripcion}`).join(', ')}
                                     </div>
                                 </div>
                             ))
@@ -376,7 +405,6 @@ function ComprasModulo() {
                 </div>
             </div>
 
-            {/* Modal: Agregar Compra desde Foto (OCR Simulation) */}
             {showFotoModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-md w-full space-y-4 border border-slate-200 dark:border-slate-700">
@@ -384,7 +412,7 @@ function ComprasModulo() {
                             <span>📸</span> Escanear Factura con IA / OCR
                         </h3>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
-                            Sube una fotografía o imagen escaneada de la factura física del proveedor. El sistema extraerá automáticamente el proveedor, número y artículos.
+                            Sube una fotografía de la factura física del proveedor para extraer automáticamente los artículos.
                         </p>
                         <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-6 text-center">
                             <input 
@@ -407,7 +435,6 @@ function ComprasModulo() {
                 </div>
             )}
 
-            {/* Modal: Agregar Compra por Sentencia SQL */}
             {showSqlModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-lg w-full space-y-4 border border-slate-200 dark:border-slate-700">
@@ -415,7 +442,7 @@ function ComprasModulo() {
                             <span>💻</span> Importar Factura vía Sentencia SQL
                         </h3>
                         <p className="text-sm text-slate-500 dark:text-slate-400">
-                            Pega tu sentencia SQL INSERT para registrar la factura directamente en la base de datos local.
+                            Pega tu sentencia SQL INSERT para registrar la factura directamente en la base de datos.
                         </p>
                         <form onSubmit={handleEjecutarSql} className="space-y-4">
                             <textarea 
