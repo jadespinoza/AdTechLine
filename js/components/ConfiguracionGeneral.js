@@ -1,4 +1,4 @@
-// Componente ConfiguracionGeneral - Manejo de datos de la empresa, impuestos, tema visual y respaldos integrados
+// Componente ConfiguracionGeneral - Manejo de datos de la empresa, impuestos y tema visual
 function ConfiguracionGeneral({ config, setConfig, theme, setTheme, itbisRate, setItbisRate }) {
     const [formData, setFormData] = React.useState(() => {
         const saved = localStorage.getItem('adtech_negocio_config');
@@ -14,36 +14,7 @@ function ConfiguracionGeneral({ config, setConfig, theme, setTheme, itbisRate, s
         };
     });
 
-    const [stats, setStats] = React.useState({ productos: 0, ventas: 0, clientes: 0, tamano: '0 KB' });
     const [mensaje, setMensaje] = React.useState({ texto: '', tipo: '' });
-    const fileInputRef = React.useRef(null);
-
-    React.useEffect(() => {
-        calcularEstadisticas();
-    }, []);
-
-    const calcularEstadisticas = () => {
-        try {
-            const productos = JSON.parse(localStorage.getItem('adtech_productos') || '[]');
-            const ventas = JSON.parse(localStorage.getItem('adtech_ventas') || '[]');
-            const clientes = JSON.parse(localStorage.getItem('adtech_clientes') || '[]');
-
-            let totalBytes = 0;
-            for (let key in localStorage) {
-                if (localStorage.hasOwnProperty(key)) {
-                    totalBytes += ((localStorage[key].length + key.length) * 2);
-                }
-            }
-            setStats({
-                productos: productos.length,
-                ventas: ventas.length,
-                clientes: clientes.length,
-                tamano: (totalBytes / 1024).toFixed(2) + ' KB'
-            });
-        } catch (e) {
-            console.error(e);
-        }
-    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -69,72 +40,6 @@ function ConfiguracionGeneral({ config, setConfig, theme, setTheme, itbisRate, s
         setTimeout(() => setMensaje({ texto: '', tipo: '' }), 4000);
     };
 
-    const handleDescargarRespaldo = () => {
-        try {
-            const backupData = {};
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith('adtech_') || key.startsWith('jacko_')) {
-                    backupData[key] = JSON.parse(localStorage.getItem(key));
-                }
-            }
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
-            const downloadAnchor = document.createElement('a');
-            const fechaStr = new Date().toISOString().slice(0, 10);
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `AdTech_Respaldo_${fechaStr}.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-            setMensaje({ texto: '¡Respaldo descargado exitosamente!', tipo: 'success' });
-        } catch (error) {
-            setMensaje({ texto: 'Error al generar el respaldo.', tipo: 'error' });
-        }
-    };
-
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const backupData = JSON.parse(event.target.result);
-                Object.keys(backupData).forEach(key => {
-                    localStorage.setItem(key, JSON.stringify(backupData[key]));
-                });
-                calcularEstadisticas();
-                const savedConfig = localStorage.getItem('adtech_negocio_config');
-                if (savedConfig) {
-                    const parsed = JSON.parse(savedConfig);
-                    setFormData(parsed);
-                    if (setConfig) setConfig(parsed);
-                }
-                setMensaje({ texto: '¡Datos restaurados correctamente! Recarga la página.', tipo: 'success' });
-            } catch (error) {
-                setMensaje({ texto: 'El archivo de respaldo no es válido.', tipo: 'error' });
-            }
-        };
-        reader.readAsText(file);
-        e.target.value = '';
-    };
-
-    const handleBorrarTodo = () => {
-        if (!window.confirm('⚠️ ¿Estás SEGURO de borrar todos los datos locales de AdTech?')) return;
-        const confirmacion = window.prompt('Escribe "BORRAR" en mayúsculas para confirmar:');
-        if (confirmacion === 'BORRAR') {
-            const keysToRemove = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key.startsWith('adtech_') || key.startsWith('jacko_')) {
-                    keysToRemove.push(key);
-                }
-            }
-            keysToRemove.forEach(k => localStorage.removeItem(k));
-            calcularEstadisticas();
-            setMensaje({ texto: 'Se han borrado todos los datos del sistema.', tipo: 'warning' });
-        }
-    };
-
     return (
         <div className="max-w-4xl mx-auto space-y-6 pb-12">
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border border-slate-200 dark:border-slate-700">
@@ -148,7 +53,6 @@ function ConfiguracionGeneral({ config, setConfig, theme, setTheme, itbisRate, s
                 {mensaje.texto && (
                     <div className={`p-3 mb-6 rounded-lg text-sm flex items-center justify-between ${
                         mensaje.tipo === 'success' ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' :
-                        mensaje.tipo === 'warning' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' :
                         'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300'
                     }`}>
                         <span>{mensaje.texto}</span>
