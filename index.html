@@ -65,21 +65,22 @@
             const [theme, setTheme] = useState(localStorage.getItem('adtech_theme') || 'light');
             const [language, setLanguage] = useState(localStorage.getItem('adtech_lang') || 'es');
             const [activeTab, setActiveTab] = useState('pos');
-            const [configSubTab, setConfigSubTab] = useState('general'); // 'general' | 'datos'
+            const [configSubTab, setConfigSubTab] = useState('general'); // 'general' | 'usuarios' | 'datos'
             const [itbisRate, setItbisRate] = useState(18);
 
-            // Gestión de Usuarios y Autenticación (Soporte Adporte, Administrador, Usuario Normal)
+            // Gestión de Usuarios y Autenticación (Soporte, Administrador, Cajero)
             const [users, setUsers] = useState(() => {
                 const saved = localStorage.getItem('adtech_users');
                 if (saved) return JSON.parse(saved);
-                // Primer usuario por defecto: Adporte (Soporte Técnico principal)
                 return [
-                    { id: '1', username: 'Adporte', pin: '1234', nombre: 'Soporte Técnico Principal', email: 'soporte@adtech.com', rol: 'soporte' }
+                    { id: '1', username: 'Adporte', pin: '1234', nombre: 'Soporte Técnico Principal', email: 'soporte@adtech.com', rol: 'soporte' },
+                    { id: '2', username: 'admin', pin: 'admin', nombre: 'Administrador General', email: 'admin@adtech.com', rol: 'admin' },
+                    { id: '3', username: 'cajero', pin: '1111', nombre: 'Cajero Principal', email: 'cajero@adtech.com', rol: 'cajero' }
                 ];
             });
-            const [currentUser, setCurrentUser] = useState(null); // {username, rol, nombre}
+            const [currentUser, setCurrentUser] = useState(null);
             const [loginForm, setLoginForm] = useState({ username: '', pin: '' });
-            const [showLoginConfig, setShowLoginConfig] = useState(false); // Configuración resumida en login
+            const [showLoginConfig, setShowLoginConfig] = useState(false);
 
             useEffect(() => {
                 localStorage.setItem('adtech_users', JSON.stringify(users));
@@ -135,16 +136,18 @@
                 };
             });
 
-            // Productos e Inventario con soporte de submenús y precio editable
+            // Productos e Inventario con Stock en tiempo real
             const [products, setProducts] = useState(() => {
                 const saved = localStorage.getItem('adtech_products');
                 return saved ? JSON.parse(saved) : [
-                    { id: '1', nombre: 'Coca-Cola', costo: 25, venta: 35, categoria: 'Refrescos', disponible: true, tieneSubmenu: false, precioEditable: false, img: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=300' },
+                    { id: '1', nombre: 'Coca-Cola', costo: 25, venta: 35, stock: 24, controlarStock: true, categoria: 'Refrescos', disponible: true, tieneSubmenu: false, precioEditable: false, img: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=300' },
                     { 
                         id: '2', 
                         nombre: 'Plato del Día', 
                         costo: 120, 
                         venta: 200, 
+                        stock: 50,
+                        controlarStock: false,
                         categoria: 'Platos', 
                         esPlatoDia: true, 
                         tieneSubmenu: true, 
@@ -159,6 +162,8 @@
                         nombre: 'Porción', 
                         costo: 50, 
                         venta: 100, 
+                        stock: 50,
+                        controlarStock: false,
                         categoria: 'Platos', 
                         tieneSubmenu: true, 
                         precioEditable: true,
@@ -167,7 +172,7 @@
                         disponible: true, 
                         img: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=300' 
                     },
-                    { id: '3', nombre: 'Jugo Natural Chinola', costo: 30, venta: 60, categoria: 'Bebidas', disponible: true, tieneSubmenu: false, precioEditable: false, img: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=300' }
+                    { id: '3', nombre: 'Jugo Natural Chinola', costo: 30, venta: 60, stock: 15, controlarStock: true, categoria: 'Bebidas', disponible: true, tieneSubmenu: false, precioEditable: false, img: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=300' }
                 ];
             });
 
@@ -220,6 +225,8 @@
                 nombre: '',
                 costo: 0,
                 venta: 0,
+                stock: 10,
+                controlarStock: true,
                 categoria: 'Platos',
                 img: '',
                 tieneSubmenu: false,
@@ -250,6 +257,11 @@
                 localStorage.setItem('adtech_menu_dia_config', JSON.stringify(menuDiaConfig));
             }, [menuDiaConfig]);
 
+            // Sincronizar inventario cuando se actualice desde compras
+            const handleInventarioActualizado = (nuevoInventario) => {
+                setProducts(nuevoInventario);
+            };
+
             // Manejo de Login
             const handleLogin = (e) => {
                 e.preventDefault();
@@ -262,7 +274,7 @@
             };
 
             const handleOlvidePassword = () => {
-                if (confirm('¿Desea restablecer las credenciales? Esto borrará los usuarios registrados y restaurará el usuario de Soporte por defecto (Adporte).')) {
+                if (confirm('¿Desea restablecer las credenciales? Esto restaurará el usuario de Soporte por defecto (Adporte / 1234).')) {
                     const defaultUser = [{ id: '1', username: 'Adporte', pin: '1234', nombre: 'Soporte Técnico Principal', email: 'soporte@adtech.com', rol: 'soporte' }];
                     setUsers(defaultUser);
                     localStorage.setItem('adtech_users', JSON.stringify(defaultUser));
@@ -270,40 +282,34 @@
                 }
             };
 
-            // Lógica Submenú Dinámico (Plato del Día, Porción, etc.)
+            // Lógica Submenú Dinámico
             const isLocrio = platoConfig.principal && platoConfig.principal.toLowerCase().includes('locrio');
 
             const handleAddPlatoDia = () => {
                 if (!activeSubmenuProduct) return;
-                const subs = activeSubmenuProduct.submenus || [];
-
-                // Solo el Arroz / Principal es estrictamente obligatorio (si el submenú lo incluye)
-                if (subs.includes('arroces') && !platoConfig.principal) {
-                    return alert('Por favor seleccione al menos el arroz / plato principal.');
+                const hasAnySelection = platoConfig.principal || platoConfig.carne || platoConfig.ensalada || platoConfig.extra;
+                if (!hasAnySelection) {
+                    return alert('Por favor seleccione al menos un elemento para la porción.');
                 }
 
                 let detalles = [];
-                if (subs.includes('arroces') && platoConfig.principal) {
-                    detalles.push(platoConfig.principal);
-                }
-                // Carnes, ensaladas y extras son omitibles
-                if (subs.includes('carnes') && platoConfig.carne && !isLocrio) {
-                    detalles.push(`Carne: ${platoConfig.carne}`);
-                }
-                if (subs.includes('ensaladas') && platoConfig.ensalada) {
-                    detalles.push(`Ensalada: ${platoConfig.ensalada}`);
-                }
-                if (subs.includes('extras') && platoConfig.extra) {
-                    detalles.push(`Extra: ${platoConfig.extra}`);
-                }
+                if (platoConfig.principal) detalles.push(platoConfig.principal);
+                if (platoConfig.carne && !isLocrio) detalles.push(platoConfig.carne);
+                if (platoConfig.ensalada) detalles.push(`Ensalada: ${platoConfig.ensalada}`);
+                if (platoConfig.extra) detalles.push(`Extra: ${platoConfig.extra}`);
 
-                const desc = `${activeSubmenuProduct.nombre} (${menuDate}): ${detalles.join(', ')}`;
+                const desc = detalles.length === 1 
+                    ? `${activeSubmenuProduct.nombre} de ${detalles[0]}` 
+                    : `${activeSubmenuProduct.nombre} (${menuDate}): ${detalles.join(', ')}`;
+                
                 const item = {
                     id: 'custom-' + Date.now(),
+                    productId: activeSubmenuProduct.id,
                     nombre: desc,
                     precio: Number(platoConfig.precio) || activeSubmenuProduct.venta,
                     cantidad: 1,
-                    esCustom: true
+                    esCustom: true,
+                    controlarStock: activeSubmenuProduct.controlarStock
                 };
                 setCart([...cart, item]);
                 setShowPlatoModal(false);
@@ -315,50 +321,50 @@
                 if (usaSubmenu) {
                     const subs = product.submenus || ['arroces', 'carnes', 'ensaladas', 'extras'];
                     const permitidas = product.opcionesPermitidas || [];
-
                     const filtrar = (lista) => lista.filter(i => i.disponible && (permitidas.length === 0 || permitidas.includes(i.nombre)));
 
                     const dispArroces = filtrar(menuDiaConfig.arroces);
-                    const dispCarnes = filtrar(menuDiaConfig.carnes);
-                    const dispEnsaladas = filtrar(menuDiaConfig.ensaladas);
-                    const dispExtras = filtrar(menuDiaConfig.extras);
-
                     const precioInicial = product.esPlatoDia ? menuDiaConfig.precioBase : product.venta;
 
                     setActiveSubmenuProduct({ ...product, submenus: subs, opcionesPermitidas: permitidas });
                     setPlatoConfig({
                         principal: subs.includes('arroces') ? (dispArroces[0]?.nombre || '') : '',
-                        carne: '', // Omitible por defecto
-                        ensalada: '', // Omitible por defecto
-                        extra: '', // Omitible por defecto
+                        carne: '',
+                        ensalada: '',
+                        extra: '',
                         precio: precioInicial
                     });
                     setShowPlatoModal(true);
                     return;
                 }
 
+                // Control estricto de existencia (stock)
+                if (product.controlarStock && (product.stock || 0) <= 0) {
+                    return alert(`El producto "${product.nombre}" está agotado en inventario.`);
+                }
+
                 if (product.precioEditable) {
                     const customPrice = prompt(`Ingrese el precio de venta para "${product.nombre}" (${negocioConfig.moneda || 'RD$'}):`, product.venta);
                     if (customPrice === null) return;
                     const finalPrice = Number(customPrice) || product.venta;
-                    setCart([...cart, { id: product.id + '-' + Date.now(), nombre: product.nombre, precio: finalPrice, cantidad: 1 }]);
+                    setCart([...cart, { id: product.id + '-' + Date.now(), productId: product.id, nombre: product.nombre, precio: finalPrice, cantidad: 1, controlarStock: product.controlarStock }]);
                     return;
                 }
 
                 const existing = cart.find(c => c.id === product.id);
                 if (existing) {
+                    if (product.controlarStock && existing.cantidad >= product.stock) {
+                        return alert(`Stock insuficiente. Solo quedan ${product.stock} unidades disponibles.`);
+                    }
                     setCart(cart.map(c => c.id === product.id ? { ...c, cantidad: c.cantidad + 1 } : c));
                 } else {
-                    setCart([...cart, { id: product.id, nombre: product.nombre, precio: product.venta, cantidad: 1 }]);
+                    setCart([...cart, { id: product.id, productId: product.id, nombre: product.nombre, precio: product.venta, cantidad: 1, controlarStock: product.controlarStock }]);
                 }
             };
 
-            // Borrar Factura Completa
             const handleClearInvoice = () => {
-                if (cart.length === 0) {
-                    return alert('El carrito ya está vacío.');
-                }
-                if (confirm('¿Está seguro de que desea borrar la factura completa? Se perderán todos los ítems agregados.')) {
+                if (cart.length === 0) return alert('El carrito ya está vacío.');
+                if (confirm('¿Está seguro de que desea borrar la factura completa?')) {
                     setCart([]);
                     setDiscount(0);
                     setSelectedClient('1');
@@ -366,14 +372,11 @@
                 }
             };
 
-            // Manejo de carga de imagen local
             const handleImageFileChange = (e) => {
                 const file = e.target.files[0];
                 if (file) {
                     const reader = new FileReader();
-                    reader.onloadend = () => {
-                        setProductForm(prev => ({ ...prev, img: reader.result }));
-                    };
+                    reader.onloadend = () => setProductForm(prev => ({ ...prev, img: reader.result }));
                     reader.readAsDataURL(file);
                 }
             };
@@ -384,6 +387,8 @@
                     nombre: '',
                     costo: 0,
                     venta: 0,
+                    stock: 10,
+                    controlarStock: true,
                     categoria: 'Platos',
                     img: '',
                     tieneSubmenu: false,
@@ -400,6 +405,8 @@
                     nombre: prod.nombre,
                     costo: prod.costo,
                     venta: prod.venta,
+                    stock: prod.stock !== undefined ? prod.stock : 10,
+                    controlarStock: prod.controlarStock !== false,
                     categoria: prod.categoria || 'Bebidas',
                     img: prod.img || '',
                     tieneSubmenu: prod.tieneSubmenu || prod.esPlatoDia || false,
@@ -425,7 +432,6 @@
                 setShowProductModal(false);
             };
 
-            // Guardar cliente desde formulario DGII
             const handleGuardarNuevoCliente = (nuevoClienteObj) => {
                 setClients([...clients, nuevoClienteObj]);
                 setSelectedClient(nuevoClienteObj.id);
@@ -440,11 +446,28 @@
             const subtotal = total / (1 + (itbisRate / 100));
             const itbis = total - subtotal;
 
-            // Facturar
+            // Facturar y Descontar Stock Automáticamente
             const handleFacturar = () => {
                 if (cart.length === 0) return alert('El carrito está vacío');
-                const clientObj = clients.find(c => c.id === selectedClient) || { nombre: 'Cliente General' };
                 
+                // Validar existencias antes de facturar
+                let inventoryUpdated = [...products];
+                for (let item of cart) {
+                    if (item.productId) {
+                        const prod = inventoryUpdated.find(p => p.id === item.productId);
+                        if (prod && prod.controlarStock) {
+                            if ((prod.stock || 0) < item.cantidad) {
+                                return alert(`Stock insuficiente para "${prod.nombre}". Stock actual: ${prod.stock}, requerido: ${item.cantidad}`);
+                            }
+                            prod.stock -= item.cantidad;
+                        }
+                    }
+                }
+
+                setProducts(inventoryUpdated);
+                localStorage.setItem('adtech_products', JSON.stringify(inventoryUpdated));
+
+                const clientObj = clients.find(c => c.id === selectedClient) || { nombre: 'Cliente General' };
                 const invoice = {
                     id: 'FAC-' + Math.floor(100000 + Math.random() * 900000),
                     ncf: ncfType + '00000123',
@@ -468,23 +491,23 @@
                 setCart([]);
             };
 
-            // PANTALLA DE LOGIN SI NO HAY USUARIO AUTENTICADO
+            // LOGIN
             if (!currentUser) {
                 return (
-                    <div class="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-                        <div class="bg-slate-800 border border-slate-700 p-8 rounded-2xl max-w-md w-full shadow-2xl space-y-6">
-                            <div class="text-center space-y-2">
-                                <div class="inline-block bg-sky-500 text-white font-black px-4 py-1.5 rounded-xl text-2xl shadow">AdTech</div>
-                                <h1 class="text-xl font-bold text-white">Iniciar Sesión</h1>
-                                <p class="text-xs text-slate-400">Ingrese sus credenciales de acceso al sistema</p>
+                    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+                        <div className="bg-slate-800 border border-slate-700 p-8 rounded-2xl max-w-md w-full shadow-2xl space-y-6">
+                            <div className="text-center space-y-2">
+                                <div className="inline-block bg-sky-500 text-white font-black px-4 py-1.5 rounded-xl text-2xl shadow">AdTech</div>
+                                <h1 className="text-xl font-bold text-white">Iniciar Sesión</h1>
+                                <p className="text-xs text-slate-400">Ingrese sus credenciales de acceso al sistema</p>
                             </div>
 
-                            <form onSubmit={handleLogin} class="space-y-4">
+                            <form onSubmit={handleLogin} className="space-y-4">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-300 mb-1">Usuario</label>
+                                    <label className="block text-xs font-semibold text-slate-300 mb-1">Usuario</label>
                                     <input
                                         type="text"
-                                        placeholder="Ej. Adporte, admin..."
+                                        placeholder="Ej. Adporte, admin, cajero..."
                                         value={loginForm.username}
                                         onChange={e => setLoginForm({ ...loginForm, username: e.target.value })}
                                         className="w-full p-3 bg-slate-700 border border-slate-600 rounded-xl text-white text-sm outline-none focus:border-sky-500"
@@ -492,7 +515,7 @@
                                     />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-300 mb-1">Contraseña / PIN</label>
+                                    <label className="block text-xs font-semibold text-slate-300 mb-1">Contraseña / PIN</label>
                                     <input
                                         type="password"
                                         placeholder="••••"
@@ -511,7 +534,7 @@
                                 </button>
                             </form>
 
-                            <div class="flex justify-between items-center text-xs pt-2 border-t border-slate-700">
+                            <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-700">
                                 <button
                                     type="button"
                                     onClick={() => setShowLoginConfig(true)}
@@ -528,25 +551,24 @@
                                 </button>
                             </div>
 
-                            <div class="text-[11px] text-center text-slate-500 bg-slate-900/50 p-2.5 rounded-lg border border-slate-800">
-                                Por defecto Soporte Técnico principal: Usuario <strong class="text-slate-300">Adporte</strong> | Clave <strong class="text-slate-300">1234</strong>
+                            <div className="text-[11px] text-center text-slate-500 bg-slate-900/50 p-2.5 rounded-lg border border-slate-800 space-y-1">
+                                <div>Soporte: <strong className="text-slate-300">Adporte</strong> / <strong className="text-slate-300">1234</strong></div>
+                                <div>Admin: <strong className="text-slate-300">admin</strong> / <strong className="text-slate-300">admin</strong> | Cajero: <strong className="text-slate-300">cajero</strong> / <strong className="text-slate-300">1111</strong></div>
                             </div>
                         </div>
 
-                        {/* MODAL CONFIGURACIÓN RESUMIDA EN LOGIN */}
                         {showLoginConfig && (
-                            <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                                <div class="bg-slate-800 border border-slate-700 p-6 rounded-2xl max-w-sm w-full space-y-4 shadow-2xl">
-                                    <div class="flex justify-between items-center border-b border-slate-700 pb-3">
-                                        <h3 class="font-bold text-white text-sm">Configuración Resumida</h3>
-                                        <button onClick={() => setShowLoginConfig(false)} class="text-slate-400 hover:text-white">
+                            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                                <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl max-w-sm w-full space-y-4 shadow-2xl">
+                                    <div className="flex justify-between items-center border-b border-slate-700 pb-3">
+                                        <h3 className="font-bold text-white text-sm">Configuración Resumida</h3>
+                                        <button onClick={() => setShowLoginConfig(false)} className="text-slate-400 hover:text-white">
                                             <Icon name="x" size={18} />
                                         </button>
                                     </div>
-
-                                    <div class="space-y-3 text-xs">
+                                    <div className="space-y-3 text-xs">
                                         <div>
-                                            <label class="block font-semibold text-slate-300 mb-1">Apariencia / Tema</label>
+                                            <label className="block font-semibold text-slate-300 mb-1">Apariencia / Tema</label>
                                             <select
                                                 value={theme}
                                                 onChange={e => setTheme(e.target.value)}
@@ -556,20 +578,7 @@
                                                 <option value="dark">Modo Oscuro (Dark)</option>
                                             </select>
                                         </div>
-
-                                        <div>
-                                            <label class="block font-semibold text-slate-300 mb-1">Idioma</label>
-                                            <select
-                                                value={language}
-                                                onChange={e => setLanguage(e.target.value)}
-                                                className="w-full p-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white"
-                                            >
-                                                <option value="es">Español</option>
-                                                <option value="en">English</option>
-                                            </select>
-                                        </div>
                                     </div>
-
                                     <button
                                         onClick={() => setShowLoginConfig(false)}
                                         className="w-full bg-sky-500 text-white font-bold py-2 rounded-xl text-xs"
@@ -584,21 +593,21 @@
             }
 
             return (
-                <div class="min-h-screen flex flex-col">
+                <div className="min-h-screen flex flex-col">
                     {/* Header TopBar */}
-                    <header class="bg-sky-500 dark:bg-slate-800 text-white p-4 shadow-lg flex justify-between items-center">
-                        <div class="flex items-center space-x-3">
-                            <div class="bg-white text-sky-600 font-black px-3 py-1 rounded-xl text-xl shadow">AdTech</div>
-                            <span class="text-xs sm:text-sm font-light text-sky-100 border-l pl-3 border-sky-400">
+                    <header className="bg-sky-500 dark:bg-slate-800 text-white p-4 shadow-lg flex justify-between items-center">
+                        <div className="flex items-center space-x-3">
+                            <div className="bg-white text-sky-600 font-black px-3 py-1 rounded-xl text-xl shadow">AdTech</div>
+                            <span className="text-xs sm:text-sm font-light text-sky-100 border-l pl-3 border-sky-400">
                                 {negocioConfig.nombreNegocio || 'Sistema POS Cafetería'}
                             </span>
                         </div>
                         
-                        <div class="flex items-center space-x-3">
-                            <div class="text-xs bg-sky-600 dark:bg-slate-700 px-3 py-1.5 rounded-lg border border-sky-400/30 flex items-center gap-2">
+                        <div className="flex items-center space-x-3">
+                            <div className="text-xs bg-sky-600 dark:bg-slate-700 px-3 py-1.5 rounded-lg border border-sky-400/30 flex items-center gap-2">
                                 <Icon name="user" size={14} />
-                                <span class="font-bold">{currentUser.nombre}</span>
-                                <span class="bg-sky-700 dark:bg-slate-600 px-1.5 py-0.5 rounded text-[10px] uppercase font-mono">{currentUser.rol}</span>
+                                <span className="font-bold">{currentUser.nombre}</span>
+                                <span className="bg-sky-700 dark:bg-slate-600 px-1.5 py-0.5 rounded text-[10px] uppercase font-mono">{currentUser.rol}</span>
                             </div>
                             <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} className="p-2 rounded-lg bg-sky-600 dark:bg-slate-700 hover:bg-sky-700 transition" title="Cambiar Tema">
                                 <Icon name={theme === 'light' ? 'moon' : 'sun'} size={20} />
@@ -613,14 +622,15 @@
                     </header>
 
                     {/* Navigation Bar */}
-                    <nav class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 flex space-x-4 overflow-x-auto">
+                    <nav className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 flex space-x-4 overflow-x-auto">
                         {[
                             { id: 'pos', label: 'Facturación / POS', icon: 'shopping-cart' },
                             { id: 'menudia', label: 'Menú del Día (Disponibilidad)', icon: 'utensils' },
                             { id: 'inventory', label: 'Inventario & Productos', icon: 'grid' },
                             { id: 'clients', label: 'Clientes & CxC', icon: 'users' },
                             { id: 'suppliers', label: 'Proveedores & CxP', icon: 'truck' },
-                            { id: 'compras', label: 'Módulo de Compras', icon: 'package' },
+                            { id: 'compras', label: 'Compras', icon: 'package' },
+                            { id: 'config', label: 'Configuración', icon: 'settings' },
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -638,40 +648,48 @@
                     </nav>
 
                     {/* Main Layout */}
-                    <main class="flex-1 p-4 max-w-7xl w-full mx-auto">
+                    <main className="flex-1 p-4 max-w-7xl w-full mx-auto">
                         {/* TAB 1: POS FACTURACIÓN */}
                         {activeTab === 'pos' && (
-                            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                                <div class="lg:col-span-7 flex flex-col space-y-4">
-                                    <div class="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                                        <h2 class="font-bold text-lg text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                                <div className="lg:col-span-7 flex flex-col space-y-4">
+                                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                                        <h2 className="font-bold text-lg text-slate-700 dark:text-slate-200 flex items-center gap-2">
                                             <Icon name="grid" size={20} /> Productos Disponibles
                                         </h2>
-                                        <span class="text-xs bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 font-semibold px-2.5 py-1 rounded-full">
+                                        <span className="text-xs bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200 font-semibold px-2.5 py-1 rounded-full">
                                             {products.filter(p => p.disponible).length} Items
                                         </span>
                                     </div>
 
-                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                         {products.filter(p => p.disponible).map(product => (
                                             <button
                                                 key={product.id}
                                                 onClick={() => addToCart(product)}
                                                 className="group relative bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition transform active:scale-95 border border-slate-200 dark:border-slate-700 flex flex-col text-left"
                                             >
-                                                <div class="h-28 w-full overflow-hidden bg-slate-100 relative">
-                                                    <img src={product.img || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'} alt={product.nombre} class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                                <div className="h-28 w-full overflow-hidden bg-slate-100 relative">
+                                                    <img src={product.img || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'} alt={product.nombre} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
                                                     {product.tieneSubmenu && (
-                                                        <span class="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow">Configurar</span>
+                                                        <span className="absolute top-2 right-2 bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shadow">Configurar</span>
+                                                    )}
+                                                    {product.controlarStock && (
+                                                        <span className={`absolute bottom-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold shadow ${
+                                                            (product.stock || 0) > 5 ? 'bg-emerald-500 text-white' :
+                                                            (product.stock || 0) > 0 ? 'bg-amber-500 text-white' : 'bg-rose-500 text-white'
+                                                        }`}>
+                                                            Stock: {product.stock || 0}
+                                                        </span>
                                                     )}
                                                 </div>
-                                                <div class="p-3 flex flex-col justify-between flex-1 w-full">
-                                                    <span class="font-semibold text-slate-800 dark:text-slate-100 text-sm line-clamp-1">{product.nombre}</span>
-                                                    <div class="flex justify-between items-center mt-2">
-                                                        <span class="text-xs font-semibold text-sky-600 dark:text-sky-400">
+                                                <div className="p-3 flex flex-col justify-between flex-1 w-full">
+                                                    <span className="font-semibold text-slate-800 dark:text-slate-100 text-sm line-clamp-1">{product.nombre}</span>
+                                                    <div className="flex justify-between items-center mt-2">
+                                                        <span className="text-xs font-semibold text-sky-600 dark:text-sky-400">
                                                             {negocioConfig.moneda || 'RD$'} {product.esPlatoDia ? menuDiaConfig.precioBase.toFixed(2) : product.venta.toFixed(2)}
                                                         </span>
-                                                        <span class="bg-sky-50 dark:bg-slate-700 text-sky-600 dark:text-sky-300 p-1.5 rounded-lg group-hover:bg-sky-500 group-hover:text-white transition">
+                                                        <span className="bg-sky-50 dark:bg-slate-700 text-sky-600 dark:text-sky-300 p-1.5 rounded-lg group-hover:bg-sky-500 group-hover:text-white transition">
                                                             <Icon name="plus" size={14} />
                                                         </span>
                                                     </div>
@@ -681,18 +699,17 @@
                                     </div>
                                 </div>
 
-                                <div class="lg:col-span-5 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-5 flex flex-col justify-between">
-                                    <div class="space-y-4">
-                                        <div class="border-b border-slate-200 dark:border-slate-700 pb-4 space-y-3">
-                                            <div class="flex justify-between items-center">
-                                                <h2 class="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                                <div className="lg:col-span-5 bg-white dark:bg-slate-800 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700 p-5 flex flex-col justify-between">
+                                    <div className="space-y-4">
+                                        <div className="border-b border-slate-200 dark:border-slate-700 pb-4 space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <h2 className="font-bold text-lg text-slate-800 dark:text-slate-100 flex items-center gap-2">
                                                     <span>Detalle de Factura</span>
                                                 </h2>
                                                 {cart.length > 0 && (
                                                     <button
                                                         onClick={handleClearInvoice}
                                                         className="bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-800 transition flex items-center gap-1 shadow-sm"
-                                                        title="Borrar factura completa"
                                                     >
                                                         <Icon name="trash-2" size={14} />
                                                         <span>Borrar Factura</span>
@@ -701,8 +718,8 @@
                                             </div>
 
                                             <div>
-                                                <div class="flex justify-between items-center mb-1">
-                                                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400">Cliente</label>
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Cliente</label>
                                                     <button onClick={() => setShowClientModal(true)} className="text-[11px] text-sky-600 hover:underline font-bold">
                                                         + Verificar / Nuevo Cliente
                                                     </button>
@@ -718,9 +735,9 @@
                                                 </select>
                                             </div>
 
-                                            <div class="grid grid-cols-2 gap-2">
+                                            <div className="grid grid-cols-2 gap-2">
                                                 <div>
-                                                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Forma de Pago</label>
+                                                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Forma de Pago</label>
                                                     <select
                                                         value={paymentMethod}
                                                         onChange={e => setPaymentMethod(e.target.value)}
@@ -733,7 +750,7 @@
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">NCF / Comprobante</label>
+                                                    <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">NCF / Comprobante</label>
                                                     <select
                                                         value={ncfType}
                                                         onChange={e => setNcfType(e.target.value)}
@@ -746,19 +763,19 @@
                                             </div>
                                         </div>
 
-                                        <div class="max-h-60 overflow-y-auto space-y-2 pr-1">
+                                        <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
                                             {cart.length === 0 ? (
-                                                <div class="text-center py-8 text-slate-400 text-sm">
+                                                <div className="text-center py-8 text-slate-400 text-sm">
                                                     No hay items agregados a la factura
                                                 </div>
                                             ) : (
                                                 cart.map((item, idx) => (
-                                                    <div key={idx} class="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-sm">
-                                                        <div class="flex-1 pr-2">
-                                                            <div class="font-medium text-slate-800 dark:text-slate-200">{item.nombre}</div>
-                                                            <div class="text-xs text-slate-400">{negocioConfig.moneda || 'RD$'} {item.precio.toFixed(2)} c/u</div>
+                                                    <div key={idx} className="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-700/50 rounded-lg text-sm">
+                                                        <div className="flex-1 pr-2">
+                                                            <div className="font-medium text-slate-800 dark:text-slate-200">{item.nombre}</div>
+                                                            <div className="text-xs text-slate-400">{negocioConfig.moneda || 'RD$'} {item.precio.toFixed(2)} c/u</div>
                                                         </div>
-                                                        <div class="flex items-center space-x-2">
+                                                        <div className="flex items-center space-x-2">
                                                             <button
                                                                 onClick={() => {
                                                                     if (item.cantidad > 1) {
@@ -769,13 +786,21 @@
                                                                 }}
                                                                 className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center"
                                                             >-</button>
-                                                            <span class="font-semibold px-1">{item.cantidad}</span>
+                                                            <span className="font-semibold px-1">{item.cantidad}</span>
                                                             <button
-                                                                onClick={() => setCart(cart.map(c => c.id === item.id ? { ...c, cantidad: c.cantidad + 1 } : c))}
+                                                                onClick={() => {
+                                                                    if (item.productId) {
+                                                                        const prod = products.find(p => p.id === item.productId);
+                                                                        if (prod && prod.controlarStock && item.cantidad >= prod.stock) {
+                                                                            return alert(`Stock máximo alcanzado (${prod.stock}).`);
+                                                                        }
+                                                                    }
+                                                                    setCart(cart.map(c => c.id === item.id ? { ...c, cantidad: c.cantidad + 1 } : c));
+                                                                }}
                                                                 className="w-6 h-6 rounded bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center"
                                                             >+</button>
                                                         </div>
-                                                        <div class="w-16 text-right font-semibold text-slate-700 dark:text-slate-200">
+                                                        <div className="w-16 text-right font-semibold text-slate-700 dark:text-slate-200">
                                                             {negocioConfig.moneda || 'RD$'} {(item.precio * item.cantidad).toFixed(2)}
                                                         </div>
                                                     </div>
@@ -784,16 +809,16 @@
                                         </div>
                                     </div>
 
-                                    <div class="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4 space-y-2">
-                                        <div class="flex justify-between text-xs text-slate-500">
+                                    <div className="border-t border-slate-200 dark:border-slate-700 pt-4 mt-4 space-y-2">
+                                        <div className="flex justify-between text-xs text-slate-500">
                                             <span>Subtotal</span>
                                             <span>{negocioConfig.moneda || 'RD$'} {subtotal.toFixed(2)}</span>
                                         </div>
-                                        <div class="flex justify-between text-xs text-slate-500">
+                                        <div className="flex justify-between text-xs text-slate-500">
                                             <span>ITBIS ({itbisRate}%)</span>
                                             <span>{negocioConfig.moneda || 'RD$'} {itbis.toFixed(2)}</span>
                                         </div>
-                                        <div class="flex justify-between items-center text-xs text-slate-500">
+                                        <div className="flex justify-between items-center text-xs text-slate-500">
                                             <span>Descuento (%)</span>
                                             <input
                                                 type="number"
@@ -804,9 +829,9 @@
                                                 className="w-14 text-right bg-slate-100 dark:bg-slate-700 border rounded px-1 py-0.5 text-xs"
                                             />
                                         </div>
-                                        <div class="flex justify-between text-lg font-black text-slate-800 dark:text-slate-100 pt-2 border-t">
+                                        <div className="flex justify-between text-lg font-black text-slate-800 dark:text-slate-100 pt-2 border-t">
                                             <span>TOTAL</span>
-                                            <span class="text-sky-600 dark:text-sky-400">{negocioConfig.moneda || 'RD$'} {total.toFixed(2)}</span>
+                                            <span className="text-sky-600 dark:text-sky-400">{negocioConfig.moneda || 'RD$'} {total.toFixed(2)}</span>
                                         </div>
 
                                         <button
@@ -814,7 +839,7 @@
                                             className="w-full mt-3 bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl shadow-lg transition duration-200 flex items-center justify-center space-x-2"
                                         >
                                             <Icon name="printer" size={18} />
-                                            <span>Generar Factura</span>
+                                            <span>Generar Factura & Descontar Stock</span>
                                         </button>
                                     </div>
                                 </div>
@@ -823,14 +848,14 @@
 
                         {/* TAB 2: MENÚ DEL DÍA */}
                         {activeTab === 'menudia' && (
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-4xl mx-auto">
-                                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
+                            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-4xl mx-auto">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4">
                                     <div>
-                                        <h2 class="text-xl font-bold">Gestión de Menú del Día & Disponibilidad</h2>
-                                        <p class="text-xs text-slate-500">Active o desactive los acompañamientos y carnes disponibles para el día seleccionado.</p>
+                                        <h2 className="text-xl font-bold">Gestión de Menú del Día & Disponibilidad</h2>
+                                        <p className="text-xs text-slate-500">Active o desactive los acompañamientos y carnes disponibles para el día seleccionado.</p>
                                     </div>
-                                    <div class="flex items-center space-x-2">
-                                        <label class="text-xs font-semibold">Fecha del Menú:</label>
+                                    <div className="flex items-center space-x-2">
+                                        <label className="text-xs font-semibold">Fecha del Menú:</label>
                                         <input
                                             type="date"
                                             value={menuDate}
@@ -839,240 +864,66 @@
                                         />
                                     </div>
                                 </div>
-
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Arroces / Principales */}
-                                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                                        <div class="flex justify-between items-center">
-                                            <h3 class="font-bold text-sm text-sky-600 dark:text-sky-400 uppercase tracking-wider">Arroces / Principales</h3>
-                                            <button
-                                                onClick={() => {
-                                                    const name = prompt('Nombre del nuevo arroz/principal:');
-                                                    if (name) {
-                                                        setMenuDiaConfig({
-                                                            ...menuDiaConfig,
-                                                            arroces: [...menuDiaConfig.arroces, { id: 'ar-' + Date.now(), nombre: name, disponible: true }]
-                                                        });
-                                                    }
-                                                }}
-                                                class="text-xs bg-sky-500 text-white px-2 py-1 rounded"
-                                            >
-                                                + Agregar
-                                            </button>
-                                        </div>
-                                        <div class="space-y-2">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Arroces */}
+                                    <div className="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                                        <h3 className="font-bold text-sm text-sky-600 dark:text-sky-400 uppercase tracking-wider">Arroces / Principales</h3>
+                                        <div className="space-y-2">
                                             {menuDiaConfig.arroces.map(item => (
-                                                <div key={item.id} class="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
-                                                    <span class="text-sm font-medium">{item.nombre}</span>
-                                                    <div class="flex items-center space-x-3">
-                                                        <label class="flex items-center space-x-1 cursor-pointer text-xs">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={item.disponible}
-                                                                onChange={e => {
-                                                                    const updated = menuDiaConfig.arroces.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
-                                                                    setMenuDiaConfig({ ...menuDiaConfig, arroces: updated });
-                                                                }}
-                                                                class="w-4 h-4 text-sky-600 rounded"
-                                                            />
-                                                            <span class={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
-                                                                {item.disponible ? 'Disponible' : 'Agotado'}
-                                                            </span>
-                                                        </label>
-                                                        <button
-                                                            onClick={() => {
-                                                                setMenuDiaConfig({ ...menuDiaConfig, arroces: menuDiaConfig.arroces.filter(x => x.id !== item.id) });
+                                                <div key={item.id} className="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
+                                                    <span className="text-sm font-medium">{item.nombre}</span>
+                                                    <label className="flex items-center space-x-1 cursor-pointer text-xs">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={item.disponible}
+                                                            onChange={e => {
+                                                                const updated = menuDiaConfig.arroces.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
+                                                                setMenuDiaConfig({ ...menuDiaConfig, arroces: updated });
                                                             }}
-                                                            class="text-red-400 hover:text-red-600"
-                                                        >
-                                                            <Icon name="trash-2" size={14} />
-                                                        </button>
-                                                    </div>
+                                                            className="w-4 h-4 text-sky-600 rounded"
+                                                        />
+                                                        <span className={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
+                                                            {item.disponible ? 'Disponible' : 'Agotado'}
+                                                        </span>
+                                                    </label>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-
                                     {/* Carnes */}
-                                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                                        <div class="flex justify-between items-center">
-                                            <h3 class="font-bold text-sm text-sky-600 dark:text-sky-400 uppercase tracking-wider">Carnes Disponibles</h3>
-                                            <button
-                                                onClick={() => {
-                                                    const name = prompt('Nombre de la nueva carne:');
-                                                    if (name) {
-                                                        setMenuDiaConfig({
-                                                            ...menuDiaConfig,
-                                                            carnes: [...menuDiaConfig.carnes, { id: 'c-' + Date.now(), nombre: name, disponible: true }]
-                                                        });
-                                                    }
-                                                }}
-                                                class="text-xs bg-sky-500 text-white px-2 py-1 rounded"
-                                            >
-                                                + Agregar
-                                            </button>
-                                        </div>
-                                        <div class="space-y-2">
+                                    <div className="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                                        <h3 className="font-bold text-sm text-sky-600 dark:text-sky-400 uppercase tracking-wider">Carnes Disponibles</h3>
+                                        <div className="space-y-2">
                                             {menuDiaConfig.carnes.map(item => (
-                                                <div key={item.id} class="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
-                                                    <span class="text-sm font-medium">{item.nombre}</span>
-                                                    <div class="flex items-center space-x-3">
-                                                        <label class="flex items-center space-x-1 cursor-pointer text-xs">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={item.disponible}
-                                                                onChange={e => {
-                                                                    const updated = menuDiaConfig.carnes.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
-                                                                    setMenuDiaConfig({ ...menuDiaConfig, carnes: updated });
-                                                                }}
-                                                                class="w-4 h-4 text-sky-600 rounded"
-                                                            />
-                                                            <span class={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
-                                                                {item.disponible ? 'Disponible' : 'Agotado'}
-                                                            </span>
-                                                        </label>
-                                                        <button
-                                                            onClick={() => {
-                                                                setMenuDiaConfig({ ...menuDiaConfig, carnes: menuDiaConfig.carnes.filter(x => x.id !== item.id) });
+                                                <div key={item.id} className="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
+                                                    <span className="text-sm font-medium">{item.nombre}</span>
+                                                    <label className="flex items-center space-x-1 cursor-pointer text-xs">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={item.disponible}
+                                                            onChange={e => {
+                                                                const updated = menuDiaConfig.carnes.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
+                                                                setMenuDiaConfig({ ...menuDiaConfig, carnes: updated });
                                                             }}
-                                                            class="text-red-400 hover:text-red-600"
-                                                        >
-                                                            <Icon name="trash-2" size={14} />
-                                                        </button>
-                                                    </div>
+                                                            className="w-4 h-4 text-sky-600 rounded"
+                                                        />
+                                                        <span className={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
+                                                            {item.disponible ? 'Disponible' : 'Agotado'}
+                                                        </span>
+                                                    </label>
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
-
-                                    {/* Ensaladas */}
-                                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                                        <div class="flex justify-between items-center">
-                                            <h3 class="font-bold text-sm text-sky-600 dark:text-sky-400 uppercase tracking-wider">Ensaladas</h3>
-                                            <button
-                                                onClick={() => {
-                                                    const name = prompt('Nombre de la ensalada:');
-                                                    if (name) {
-                                                        setMenuDiaConfig({
-                                                            ...menuDiaConfig,
-                                                            ensaladas: [...menuDiaConfig.ensaladas, { id: 'e-' + Date.now(), nombre: name, disponible: true }]
-                                                        });
-                                                    }
-                                                }}
-                                                class="text-xs bg-sky-500 text-white px-2 py-1 rounded"
-                                            >
-                                                + Agregar
-                                            </button>
-                                        </div>
-                                        <div class="space-y-2">
-                                            {menuDiaConfig.ensaladas.map(item => (
-                                                <div key={item.id} class="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
-                                                    <span class="text-sm font-medium">{item.nombre}</span>
-                                                    <div class="flex items-center space-x-3">
-                                                        <label class="flex items-center space-x-1 cursor-pointer text-xs">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={item.disponible}
-                                                                onChange={e => {
-                                                                    const updated = menuDiaConfig.ensaladas.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
-                                                                    setMenuDiaConfig({ ...menuDiaConfig, ensaladas: updated });
-                                                                }}
-                                                                class="w-4 h-4 text-sky-600 rounded"
-                                                            />
-                                                            <span class={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
-                                                                {item.disponible ? 'Disponible' : 'Agotado'}
-                                                            </span>
-                                                        </label>
-                                                        <button
-                                                            onClick={() => {
-                                                                setMenuDiaConfig({ ...menuDiaConfig, ensaladas: menuDiaConfig.ensaladas.filter(x => x.id !== item.id) });
-                                                            }}
-                                                            class="text-red-400 hover:text-red-600"
-                                                        >
-                                                            <Icon name="trash-2" size={14} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* Extras */}
-                                    <div class="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                                        <div class="flex justify-between items-center">
-                                            <h3 class="font-bold text-sm text-sky-600 dark:text-sky-400 uppercase tracking-wider">Extras</h3>
-                                            <button
-                                                onClick={() => {
-                                                    const name = prompt('Nombre del extra:');
-                                                    if (name) {
-                                                        setMenuDiaConfig({
-                                                            ...menuDiaConfig,
-                                                            extras: [...menuDiaConfig.extras, { id: 'x-' + Date.now(), nombre: name, disponible: true }]
-                                                        });
-                                                    }
-                                                }}
-                                                class="text-xs bg-sky-500 text-white px-2 py-1 rounded"
-                                            >
-                                                + Agregar
-                                            </button>
-                                        </div>
-                                        <div class="space-y-2">
-                                            {menuDiaConfig.extras.map(item => (
-                                                <div key={item.id} class="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
-                                                    <span class="text-sm font-medium">{item.nombre}</span>
-                                                    <div class="flex items-center space-x-3">
-                                                        <label class="flex items-center space-x-1 cursor-pointer text-xs">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={item.disponible}
-                                                                onChange={e => {
-                                                                    const updated = menuDiaConfig.extras.map(x => x.id === item.id ? { ...x, disponible: e.target.checked } : x);
-                                                                    setMenuDiaConfig({ ...menuDiaConfig, extras: updated });
-                                                                }}
-                                                                class="w-4 h-4 text-sky-600 rounded"
-                                                            />
-                                                            <span class={item.disponible ? 'text-emerald-600 font-bold' : 'text-red-500'}>
-                                                                {item.disponible ? 'Disponible' : 'Agotado'}
-                                                            </span>
-                                                        </label>
-                                                        <button
-                                                            onClick={() => {
-                                                                setMenuDiaConfig({ ...menuDiaConfig, extras: menuDiaConfig.extras.filter(x => x.id !== item.id) });
-                                                            }}
-                                                            class="text-red-400 hover:text-red-600"
-                                                        >
-                                                            <Icon name="trash-2" size={14} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="p-4 bg-sky-50 dark:bg-sky-900/30 rounded-xl border border-sky-200 dark:border-sky-800 flex flex-col sm:flex-row justify-between items-center gap-4">
-                                    <div>
-                                        <h4 class="font-bold text-sm text-sky-800 dark:text-sky-300">Precio Base del Plato del Día</h4>
-                                        <p class="text-xs text-sky-600 dark:text-sky-400">Precio estándar aplicable al armar el plato.</p>
-                                    </div>
-                                    <div class="flex items-center space-x-2">
-                                        <span class="font-bold text-sm">{negocioConfig.moneda || 'RD$'}</span>
-                                        <input
-                                            type="number"
-                                            value={menuDiaConfig.precioBase}
-                                            onChange={e => setMenuDiaConfig({ ...menuDiaConfig, precioBase: Number(e.target.value) })}
-                                            className="w-24 bg-white dark:bg-slate-800 border rounded p-1.5 font-bold text-center"
-                                        />
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* TAB 3: INVENTARIO & PRODUCTOS */}
+                        {/* TAB 3: INVENTARIO & PRODUCTOS CON STOCK VISIBLE */}
                         {activeTab === 'inventory' && (
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
-                                <div class="flex justify-between items-center">
-                                    <h2 class="text-xl font-bold">Inventario & Productos</h2>
+                            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-xl font-bold">Inventario & Productos</h2>
                                     <button
                                         onClick={openNewProductModal}
                                         className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2 shadow"
@@ -1082,49 +933,49 @@
                                     </button>
                                 </div>
 
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-sm">
-                                        <thead class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                                             <tr>
-                                                <th class="p-3">Producto</th>
-                                                <th class="p-3">Categoría</th>
-                                                <th class="p-3">Precio Costo</th>
-                                                <th class="p-3">Precio Venta</th>
-                                                <th class="p-3">Config. Submenú</th>
-                                                <th class="p-3">Disponible Hoy</th>
-                                                <th class="p-3 text-center">Acciones</th>
+                                                <th className="p-3">Producto</th>
+                                                <th className="p-3">Categoría</th>
+                                                <th className="p-3 text-center">Existencia (Stock)</th>
+                                                <th className="p-3">Precio Costo</th>
+                                                <th className="p-3">Precio Venta</th>
+                                                <th className="p-3">Disponible Hoy</th>
+                                                <th className="p-3 text-center">Acciones</th>
                                             </tr>
                                         </thead>
-                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                                        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                                             {products.map(p => (
                                                 <tr key={p.id}>
-                                                    <td class="p-3 font-medium flex items-center space-x-3">
-                                                        <img src={p.img || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'} class="w-10 h-10 object-cover rounded-lg border bg-slate-100" />
+                                                    <td className="p-3 font-medium flex items-center space-x-3">
+                                                        <img src={p.img || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300'} className="w-10 h-10 object-cover rounded-lg border bg-slate-100" />
                                                         <span>{p.nombre}</span>
                                                     </td>
-                                                    <td class="p-3">{p.categoria}</td>
-                                                    <td class="p-3">{negocioConfig.moneda || 'RD$'} {p.costo.toFixed(2)}</td>
-                                                    <td class="p-3">{negocioConfig.moneda || 'RD$'} {p.venta.toFixed(2)}</td>
-                                                    <td class="p-3">
-                                                        {p.tieneSubmenu ? (
-                                                            <span class="bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-300 px-2 py-0.5 rounded text-xs font-semibold">
-                                                                Sí ({p.submenus ? p.submenus.join(', ') : 'Submenú'})
-                                                            </span>
-                                                        ) : (
-                                                            <span class="text-slate-400 text-xs">No</span>
-                                                        )}
+                                                    <td className="p-3">{p.categoria || 'General'}</td>
+                                                    <td className="p-3 text-center">
+                                                        <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                                                            (p.stock || 0) > 5 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300' :
+                                                            (p.stock || 0) > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' :
+                                                            'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300'
+                                                        }`}>
+                                                            {p.stock !== undefined ? p.stock : 0} un.
+                                                        </span>
                                                     </td>
-                                                    <td class="p-3">
+                                                    <td className="p-3">{negocioConfig.moneda || 'RD$'} {(p.costo || 0).toFixed(2)}</td>
+                                                    <td className="p-3">{negocioConfig.moneda || 'RD$'} {(p.venta || 0).toFixed(2)}</td>
+                                                    <td className="p-3">
                                                         <input
                                                             type="checkbox"
-                                                            checked={p.disponible}
+                                                            checked={p.disponible !== false}
                                                             onChange={e => {
                                                                 setProducts(products.map(x => x.id === p.id ? { ...x, disponible: e.target.checked } : x));
                                                             }}
                                                             className="w-4 h-4 text-sky-600 rounded cursor-pointer"
                                                         />
                                                     </td>
-                                                    <td class="p-3 text-center space-x-2">
+                                                    <td className="p-3 text-center space-x-2">
                                                         <button
                                                             onClick={() => openEditProductModal(p)}
                                                             className="text-sky-500 hover:text-sky-700 bg-sky-50 dark:bg-slate-700 p-1.5 rounded-lg transition"
@@ -1154,9 +1005,9 @@
 
                         {/* TAB 4: CLIENTES Y CXC */}
                         {activeTab === 'clients' && (
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
-                                <div class="flex justify-between items-center">
-                                    <h2 class="text-xl font-bold">Administración de Clientes & CxC</h2>
+                            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-xl font-bold">Administración de Clientes & CxC</h2>
                                     <button
                                         onClick={() => setShowClientModal(true)}
                                         className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2 shadow"
@@ -1166,25 +1017,23 @@
                                     </button>
                                 </div>
 
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-sm">
-                                        <thead class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                                             <tr>
-                                                <th class="p-3">Nombre / Razón Social</th>
-                                                <th class="p-3">RNC / Cédula</th>
-                                                <th class="p-3">Estado / Régimen</th>
-                                                <th class="p-3">Saldo CxC (Pendiente)</th>
-                                                <th class="p-3">Acciones</th>
+                                                <th className="p-3">Nombre / Razón Social</th>
+                                                <th className="p-3">RNC / Cédula</th>
+                                                <th className="p-3">Saldo CxC (Pendiente)</th>
+                                                <th className="p-3">Acciones</th>
                                             </tr>
                                         </thead>
-                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                                        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                                             {clients.map(c => (
                                                 <tr key={c.id}>
-                                                    <td class="p-3 font-medium">{c.nombre}</td>
-                                                    <td class="p-3">{c.rnc || 'N/A (Consumidor Final)'}</td>
-                                                    <td class="p-3 text-xs text-slate-500">{c.estado ? `${c.estado} (${c.regimen || 'NORMAL'})` : 'Registrado'}</td>
-                                                    <td class="p-3 text-amber-600 dark:text-amber-400 font-bold">{negocioConfig.moneda || 'RD$'} {(c.cxc || 0).toFixed(2)}</td>
-                                                    <td class="p-3">
+                                                    <td className="p-3 font-medium">{c.nombre}</td>
+                                                    <td className="p-3">{c.rnc || 'N/A'}</td>
+                                                    <td className="p-3 text-amber-600 dark:text-amber-400 font-bold">{negocioConfig.moneda || 'RD$'} {(c.cxc || 0).toFixed(2)}</td>
+                                                    <td className="p-3">
                                                         {c.cxc > 0 && (
                                                             <button
                                                                 onClick={() => {
@@ -1207,9 +1056,9 @@
 
                         {/* TAB 5: PROVEEDORES Y CXP */}
                         {activeTab === 'suppliers' && (
-                            <div class="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
-                                <div class="flex justify-between items-center">
-                                    <h2 class="text-xl font-bold">Administración de Proveedores & CxP</h2>
+                            <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-xl font-bold">Administración de Proveedores & CxP</h2>
                                     <button
                                         onClick={() => setShowSupplierModal(true)}
                                         className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm flex items-center space-x-2 shadow"
@@ -1219,23 +1068,23 @@
                                     </button>
                                 </div>
 
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-sm">
-                                        <thead class="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm">
+                                        <thead className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                                             <tr>
-                                                <th class="p-3">Proveedor</th>
-                                                <th class="p-3">RNC</th>
-                                                <th class="p-3">Cuentas por Pagar (CxP)</th>
-                                                <th class="p-3">Acciones</th>
+                                                <th className="p-3">Proveedor</th>
+                                                <th className="p-3">RNC</th>
+                                                <th className="p-3">Cuentas por Pagar (CxP)</th>
+                                                <th className="p-3">Acciones</th>
                                             </tr>
                                         </thead>
-                                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                                        <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
                                             {suppliers.map(s => (
                                                 <tr key={s.id}>
-                                                    <td class="p-3 font-medium">{s.nombre}</td>
-                                                    <td class="p-3">{s.rnc}</td>
-                                                    <td class="p-3 text-red-500 font-bold">{negocioConfig.moneda || 'RD$'} {s.cxp.toFixed(2)}</td>
-                                                    <td class="p-3">
+                                                    <td className="p-3 font-medium">{s.nombre}</td>
+                                                    <td className="p-3">{s.rnc}</td>
+                                                    <td className="p-3 text-red-500 font-bold">{negocioConfig.moneda || 'RD$'} {s.cxp.toFixed(2)}</td>
+                                                    <td className="p-3">
                                                         <button
                                                             onClick={() => {
                                                                 const monto = prompt('Monto a abonar/pagar a proveedor:');
@@ -1256,28 +1105,38 @@
                             </div>
                         )}
 
-                        {/* TAB COMPRAS */}
+                        {/* TAB COMPRAS (SINCRONIZADO CON INVENTARIO) */}
                         {activeTab === 'compras' && (
-                            <ComprasModulo />
+                            <ComprasModulo onInventarioActualizado={handleInventarioActualizado} />
                         )}
 
-                        {/* TAB 6: CONFIGURACIÓN & DATOS (MODULAR INTEGRADO) */}
+                        {/* TAB 6: CONFIGURACIÓN (DATOS + USUARIOS + RESPALDOS) */}
                         {activeTab === 'config' && (
-                            <div class="space-y-6">
-                                <div class="flex justify-center border-b border-slate-200 dark:border-slate-700 max-w-md mx-auto">
+                            <div className="space-y-6">
+                                <div className="flex justify-center border-b border-slate-200 dark:border-slate-700 max-w-xl mx-auto">
                                     <button
                                         onClick={() => setConfigSubTab('general')}
-                                        className={`px-6 py-2.5 font-bold text-sm border-b-2 transition ${
+                                        className={`px-5 py-2.5 font-bold text-sm border-b-2 transition ${
                                             configSubTab === 'general'
                                                 ? 'border-sky-500 text-sky-600 dark:text-sky-400'
                                                 : 'border-transparent text-slate-500 hover:text-slate-700'
                                         }`}
                                     >
-                                        ⚙️ Datos del Negocio & Tema
+                                        ⚙️ Datos del Negocio
+                                    </button>
+                                    <button
+                                        onClick={() => setConfigSubTab('usuarios')}
+                                        className={`px-5 py-2.5 font-bold text-sm border-b-2 transition ${
+                                            configSubTab === 'usuarios'
+                                                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
+                                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        👥 Usuarios & Permisos
                                     </button>
                                     <button
                                         onClick={() => setConfigSubTab('datos')}
-                                        className={`px-6 py-2.5 font-bold text-sm border-b-2 transition ${
+                                        className={`px-5 py-2.5 font-bold text-sm border-b-2 transition ${
                                             configSubTab === 'datos'
                                                 ? 'border-sky-500 text-sky-600 dark:text-sky-400'
                                                 : 'border-transparent text-slate-500 hover:text-slate-700'
@@ -1296,6 +1155,8 @@
                                         itbisRate={itbisRate}
                                         setItbisRate={setItbisRate}
                                     />
+                                ) : configSubTab === 'usuarios' ? (
+                                    <GestionUsuarios users={users} setUsers={setUsers} />
                                 ) : (
                                     <ConfiguracionDatos />
                                 )}
@@ -1303,314 +1164,131 @@
                         )}
                     </main>
 
-                    {/* MODAL CONFIGURADOR DE SUBMENÚ (PLATO DEL DÍA / PORCIÓN / CUSTOM) */}
+                    {/* MODAL CONFIGURADOR DE SUBMENÚ */}
                     {showPlatoModal && activeSubmenuProduct && (
-                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
-                                <div class="flex justify-between items-center border-b pb-3">
-                                    <div>
-                                        <h3 class="text-lg font-bold">Configurar {activeSubmenuProduct.nombre}</h3>
-                                        <p class="text-[11px] text-slate-400">Menú del {menuDate}</p>
-                                    </div>
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
+                                <div className="flex justify-between items-center border-b pb-3">
+                                    <h3 className="text-lg font-bold">Configurar {activeSubmenuProduct.nombre}</h3>
                                     <button onClick={() => setShowPlatoModal(false)} className="text-slate-400 hover:text-slate-600">
                                         <Icon name="x" size={20} />
                                     </button>
                                 </div>
 
-                                <div class="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
-                                    {/* 1. ARROCES / PRINCIPAL */}
+                                <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
                                     {activeSubmenuProduct.submenus.includes('arroces') && (
                                         <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Arroz / Principal (Obligatorio)</label>
-                                            <div class="grid grid-cols-2 gap-2">
-                                                {menuDiaConfig.arroces
-                                                    .filter(a => a.disponible && (activeSubmenuProduct.opcionesPermitidas.length === 0 || activeSubmenuProduct.opcionesPermitidas.includes(a.nombre)))
-                                                    .map(item => (
-                                                        <button
-                                                            key={item.id}
-                                                            onClick={() => setPlatoConfig({
-                                                                ...platoConfig,
-                                                                principal: platoConfig.principal === item.nombre ? '' : item.nombre
-                                                            })}
-                                                            className={`p-2 text-xs rounded-lg border font-medium text-left ${
-                                                                platoConfig.principal === item.nombre
-                                                                    ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 font-bold'
-                                                                    : 'border-slate-200 dark:border-slate-700'
-                                                            }`}
-                                                        >
-                                                            {item.nombre}
-                                                        </button>
-                                                    ))}
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Arroz / Principal</label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {menuDiaConfig.arroces.filter(a => a.disponible).map(item => (
+                                                    <button
+                                                        key={item.id}
+                                                        onClick={() => setPlatoConfig({ ...platoConfig, principal: platoConfig.principal === item.nombre ? '' : item.nombre })}
+                                                        className={`p-2 text-xs rounded-lg border font-medium text-left ${
+                                                            platoConfig.principal === item.nombre ? 'border-sky-500 bg-sky-50 text-sky-600 font-bold' : 'border-slate-200'
+                                                        }`}
+                                                    >
+                                                        {item.nombre}
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
-
-                                    {/* 2. CARNES (Omitible) */}
                                     {activeSubmenuProduct.submenus.includes('carnes') && (
                                         <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">
-                                                Carnes (Omitible) {isLocrio && <span class="text-amber-500 font-normal">(No aplica para Locrio)</span>}
-                                            </label>
-                                            <div class="grid grid-cols-3 gap-2">
-                                                {menuDiaConfig.carnes
-                                                    .filter(c => c.disponible && (activeSubmenuProduct.opcionesPermitidas.length === 0 || activeSubmenuProduct.opcionesPermitidas.includes(c.nombre)))
-                                                    .map(item => (
-                                                        <button
-                                                            key={item.id}
-                                                            disabled={isLocrio}
-                                                            onClick={() => setPlatoConfig({
-                                                                ...platoConfig,
-                                                                carne: platoConfig.carne === item.nombre ? '' : item.nombre
-                                                            })}
-                                                            className={`p-2 text-xs rounded-lg border font-medium text-center ${
-                                                                isLocrio
-                                                                    ? 'opacity-45 cursor-not-allowed border-slate-200'
-                                                                    : platoConfig.carne === item.nombre
-                                                                    ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 font-bold'
-                                                                    : 'border-slate-200 dark:border-slate-700'
-                                                            }`}
-                                                        >
-                                                            {item.nombre}
-                                                        </button>
-                                                    ))}
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Carnes</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {menuDiaConfig.carnes.filter(c => c.disponible).map(item => (
+                                                    <button
+                                                        key={item.id}
+                                                        onClick={() => setPlatoConfig({ ...platoConfig, carne: platoConfig.carne === item.nombre ? '' : item.nombre })}
+                                                        className={`p-2 text-xs rounded-lg border font-medium text-center ${
+                                                            platoConfig.carne === item.nombre ? 'border-sky-500 bg-sky-50 text-sky-600 font-bold' : 'border-slate-200'
+                                                        }`}
+                                                    >
+                                                        {item.nombre}
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
                                     )}
-
-                                    {/* 3. ENSALADAS (Omitible) */}
-                                    {activeSubmenuProduct.submenus.includes('ensaladas') && (
-                                        <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Ensalada (Omitible)</label>
-                                            <div class="grid grid-cols-3 gap-2">
-                                                {menuDiaConfig.ensaladas
-                                                    .filter(e => e.disponible && (activeSubmenuProduct.opcionesPermitidas.length === 0 || activeSubmenuProduct.opcionesPermitidas.includes(e.nombre)))
-                                                    .map(item => (
-                                                        <button
-                                                            key={item.id}
-                                                            onClick={() => setPlatoConfig({
-                                                                ...platoConfig,
-                                                                ensalada: platoConfig.ensalada === item.nombre ? '' : item.nombre
-                                                            })}
-                                                            className={`p-2 text-xs rounded-lg border font-medium text-center ${
-                                                                platoConfig.ensalada === item.nombre
-                                                                    ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 font-bold'
-                                                                    : 'border-slate-200 dark:border-slate-700'
-                                                            }`}
-                                                        >
-                                                            {item.nombre}
-                                                        </button>
-                                                    ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* 4. EXTRAS (Omitible) */}
-                                    {activeSubmenuProduct.submenus.includes('extras') && (
-                                        <div>
-                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Extra (Omitible)</label>
-                                            <div class="grid grid-cols-3 gap-2">
-                                                {menuDiaConfig.extras
-                                                    .filter(x => x.disponible && (activeSubmenuProduct.opcionesPermitidas.length === 0 || activeSubmenuProduct.opcionesPermitidas.includes(x.nombre)))
-                                                    .map(item => (
-                                                        <button
-                                                            key={item.id}
-                                                            onClick={() => setPlatoConfig({
-                                                                ...platoConfig,
-                                                                extra: platoConfig.extra === item.nombre ? '' : item.nombre
-                                                            })}
-                                                            className={`p-2 text-xs rounded-lg border font-medium text-center capitalize ${
-                                                                platoConfig.extra === item.nombre
-                                                                    ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/40 text-sky-600 dark:text-sky-300 font-bold'
-                                                                    : 'border-slate-200 dark:border-slate-700'
-                                                            }`}
-                                                        >
-                                                            {item.nombre}
-                                                        </button>
-                                                    ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* PRECIO (EDITABLE O FIJO SEGÚN CONFIGURACIÓN DEL PRODUCTO) */}
-                                    <div class="pt-2 border-t">
-                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">
-                                            Precio ({negocioConfig.moneda || 'RD$'}) {activeSubmenuProduct.precioEditable ? '(Editable)' : '(Fijo)'}
-                                        </label>
-                                        <input
-                                            type="number"
-                                            disabled={!activeSubmenuProduct.precioEditable}
-                                            value={platoConfig.precio}
-                                            onChange={e => setPlatoConfig({ ...platoConfig, precio: Number(e.target.value) })}
-                                            className={`w-full border rounded-lg p-2 font-bold ${
-                                                activeSubmenuProduct.precioEditable
-                                                    ? 'bg-slate-50 dark:bg-slate-700 border-sky-400 text-sky-600'
-                                                    : 'bg-slate-100 dark:bg-slate-800 border-slate-300 text-slate-500 cursor-not-allowed'
-                                            }`}
-                                        />
-                                    </div>
                                 </div>
 
                                 <button
                                     onClick={handleAddPlatoDia}
                                     className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl transition shadow-lg"
                                 >
-                                    Agregar {activeSubmenuProduct.nombre} al Carrito
+                                    Agregar al Carrito
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL TICKET RECEIPT / FACTURA */}
+                    {/* MODAL TICKET RECEIPT */}
                     {showReceipt && lastInvoice && (
-                        <div class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div class="bg-white text-slate-900 rounded-xl max-w-sm w-full p-6 shadow-2xl relative font-mono text-xs">
-                                <div id="printable-receipt" class="space-y-3 border p-4 rounded bg-slate-50">
-                                    <div class="text-center">
-                                        <h2 class="text-base font-black tracking-widest uppercase">{negocioConfig.nombreNegocio || 'CAFETERÍA ADTECH'}</h2>
+                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white text-slate-900 rounded-xl max-w-sm w-full p-6 shadow-2xl relative font-mono text-xs">
+                                <div id="printable-receipt" className="space-y-3 border p-4 rounded bg-slate-50">
+                                    <div className="text-center">
+                                        <h2 className="text-base font-black tracking-widest uppercase">{negocioConfig.nombreNegocio || 'CAFETERÍA ADTECH'}</h2>
                                         <p>RNC: {negocioConfig.rnc || '130999888'}</p>
-                                        {negocioConfig.telefono && <p>Tel: {negocioConfig.telefono}</p>}
-                                        <p>{negocioConfig.direccion || 'Santo Domingo, R.D.'}</p>
-                                        <p class="mt-2 font-bold">{lastInvoice.ncf}</p>
-                                        <p class="text-[10px] text-slate-500">{lastInvoice.fecha}</p>
+                                        <p className="mt-2 font-bold">{lastInvoice.ncf}</p>
+                                        <p className="text-[10px] text-slate-500">{lastInvoice.fecha}</p>
                                     </div>
-
-                                    <div class="border-b border-t border-dashed border-slate-400 py-2 space-y-1">
+                                    <div className="border-b border-t border-dashed border-slate-400 py-2 space-y-1">
                                         <p><strong>Cliente:</strong> {lastInvoice.cliente}</p>
-                                        {lastInvoice.rnc && <p><strong>RNC/Cédula:</strong> {lastInvoice.rnc}</p>}
                                         <p><strong>Pago:</strong> {lastInvoice.metodoPago}</p>
                                     </div>
-
-                                    <div class="space-y-1">
+                                    <div className="space-y-1">
                                         {lastInvoice.items.map((it, i) => (
-                                            <div key={i} class="flex justify-between">
-                                                <span>{it.cantidad}x {it.nombre.substring(0, 25)}</span>
+                                            <div key={i} className="flex justify-between">
+                                                <span>{it.cantidad}x {it.nombre}</span>
                                                 <span>{negocioConfig.moneda || 'RD$'} {(it.precio * it.cantidad).toFixed(2)}</span>
                                             </div>
                                         ))}
                                     </div>
-
-                                    <div class="border-t border-dashed border-slate-400 pt-2 space-y-1 text-right">
-                                        <div class="flex justify-between">
-                                            <span>Subtotal:</span>
-                                            <span>{negocioConfig.moneda || 'RD$'} {lastInvoice.subtotal.toFixed(2)}</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span>ITBIS:</span>
-                                            <span>{negocioConfig.moneda || 'RD$'} {lastInvoice.itbis.toFixed(2)}</span>
-                                        </div>
-                                        <div class="flex justify-between text-sm font-black border-t pt-1">
+                                    <div className="border-t border-dashed border-slate-400 pt-2 space-y-1 text-right">
+                                        <div className="flex justify-between text-sm font-black">
                                             <span>TOTAL:</span>
                                             <span>{negocioConfig.moneda || 'RD$'} {lastInvoice.total.toFixed(2)}</span>
                                         </div>
                                     </div>
-
-                                    <div class="text-center pt-3 border-t text-[10px] text-slate-500">
-                                        {negocioConfig.pieFactura || '¡Gracias por su compra en AdTech!'}
-                                    </div>
                                 </div>
-
-                                <div class="mt-4 flex space-x-2">
-                                    <button
-                                        onClick={() => window.print()}
-                                        className="flex-1 bg-sky-500 text-white font-bold py-2 rounded-lg text-sm flex items-center justify-center space-x-1"
-                                    >
-                                        <Icon name="printer" size={16} />
-                                        <span>Imprimir</span>
-                                    </button>
-                                    <button
-                                        onClick={() => setShowReceipt(false)}
-                                        className="flex-1 bg-slate-200 text-slate-800 font-bold py-2 rounded-lg text-sm"
-                                    >
-                                        Cerrar
-                                    </button>
+                                <div className="mt-4 flex space-x-2">
+                                    <button onClick={() => window.print()} className="flex-1 bg-sky-500 text-white font-bold py-2 rounded-lg text-sm">Imprimir</button>
+                                    <button onClick={() => setShowReceipt(false)} className="flex-1 bg-slate-200 text-slate-800 font-bold py-2 rounded-lg text-sm">Cerrar</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL CREAR / VERIFICAR CLIENTE CON FORMULARIO DGII INTEGRADO */}
+                    {/* MODAL CLIENTE */}
                     {showClientModal && (
-                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-                            <div class="my-8 w-full max-w-2xl">
-                                <ClienteFormulario 
-                                    onGuardarCliente={handleGuardarNuevoCliente}
-                                    onCancelar={() => setShowClientModal(false)}
-                                />
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
+                            <div className="my-8 w-full max-w-2xl">
+                                <ClienteFormulario onGuardarCliente={handleGuardarNuevoCliente} onCancelar={() => setShowClientModal(false)} />
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL CREAR PROVEEDOR */}
-                    {showSupplierModal && (
-                        <div class="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-                            <div class="bg-white dark:bg-slate-800 p-6 rounded-xl max-w-md w-full space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
-                                <h3 class="font-bold text-lg">Nuevo Proveedor</h3>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">Nombre Proveedor</label>
-                                    <input
-                                        type="text"
-                                        value={newSupplier.nombre}
-                                        onChange={e => setNewSupplier({ ...newSupplier, nombre: e.target.value })}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold mb-1">RNC</label>
-                                    <input
-                                        type="text"
-                                        value={newSupplier.rnc}
-                                        onChange={e => setNewSupplier({ ...newSupplier, rnc: e.target.value })}
-                                        className="w-full p-2 border rounded dark:bg-slate-700"
-                                    />
-                                </div>
-                                <div class="flex space-x-2">
-                                    <button
-                                        onClick={() => {
-                                            if (!newSupplier.nombre) return alert('Ingrese el nombre');
-                                            setSuppliers([...suppliers, { id: Date.now().toString(), nombre: newSupplier.nombre, rnc: newSupplier.rnc, cxp: 0 }]);
-                                            setNewSupplier({ nombre: '', rnc: '' });
-                                            setShowSupplierModal(false);
-                                        }}
-                                        className="flex-1 bg-sky-500 text-white font-bold py-2 rounded-lg"
-                                    >
-                                        Guardar
-                                    </button>
-                                    <button onClick={() => setShowSupplierModal(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 py-2 rounded-lg">
-                                        Cancelar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* MODAL NUEVO / EDITAR PRODUCTO CON SUBMENÚS Y PRECIO EDITABLE */}
+                    {/* MODAL NUEVO / EDITAR PRODUCTO */}
                     {showProductModal && (
-                        <div class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl max-w-lg w-full space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
-                                <div class="flex justify-between items-center border-b pb-3">
-                                    <h3 class="text-lg font-bold">
-                                        {editingProductId ? 'Editar Artículo / Producto' : 'Nuevo Producto / Artículo'}
-                                    </h3>
-                                    <button onClick={() => setShowProductModal(false)} className="text-slate-400 hover:text-slate-600">
-                                        <Icon name="x" size={20} />
-                                    </button>
-                                </div>
-
-                                <div class="space-y-3">
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl max-w-lg w-full space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
+                                <h3 className="text-lg font-bold">{editingProductId ? 'Editar Artículo' : 'Nuevo Producto'}</h3>
+                                <div className="space-y-3">
                                     <div>
-                                        <label class="block text-xs font-semibold mb-1">Nombre del Producto</label>
+                                        <label className="block text-xs font-semibold mb-1">Nombre</label>
                                         <input
                                             type="text"
-                                            placeholder="Ej. Plato del Día, Porción..."
                                             value={productForm.nombre}
                                             onChange={e => setProductForm({ ...productForm, nombre: e.target.value })}
-                                            className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                            className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm"
                                         />
                                     </div>
-
-                                    <div class="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-3 gap-2">
                                         <div>
-                                            <label class="block text-xs font-semibold mb-1">Precio Costo ({negocioConfig.moneda || 'RD$'})</label>
+                                            <label className="block text-xs font-semibold mb-1">Costo</label>
                                             <input
                                                 type="number"
                                                 value={productForm.costo}
@@ -1619,175 +1297,137 @@
                                             />
                                         </div>
                                         <div>
-                                            <label class="block text-xs font-semibold mb-1">Precio Venta Base ({negocioConfig.moneda || 'RD$'})</label>
+                                            <label className="block text-xs font-semibold mb-1">Venta</label>
                                             <input
                                                 type="number"
                                                 value={productForm.venta}
                                                 onChange={e => setProductForm({ ...productForm, venta: Number(e.target.value) })}
-                                                className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm font-bold text-sky-600"
+                                                className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold mb-1">Stock Inicial</label>
+                                            <input
+                                                type="number"
+                                                value={productForm.stock}
+                                                onChange={e => setProductForm({ ...productForm, stock: Number(e.target.value) })}
+                                                className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm font-bold text-emerald-600"
                                             />
                                         </div>
                                     </div>
+                                    <label className="flex items-center space-x-2 text-xs font-semibold">
+                                        <input
+                                            type="checkbox"
+                                            checked={productForm.controlarStock}
+                                            onChange={e => setProductForm({ ...productForm, controlarStock: e.target.checked })}
+                                            className="w-4 h-4 text-sky-600 rounded"
+                                        />
+                                        <span>Controlar Existencia (Stock) en Compras y POS</span>
+                                    </label>
+                                </div>
+                                <div className="flex space-x-2 pt-2">
+                                    <button onClick={handleSaveProduct} className="flex-1 bg-sky-500 text-white font-bold py-2.5 rounded-xl">Guardar</button>
+                                    <button onClick={() => setShowProductModal(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-2.5 rounded-xl">Cancelar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
 
+        // Componente auxiliar integrado para Gestión de Usuarios
+        function GestionUsuarios({ users, setUsers }) {
+            const [showModal, setShowModal] = useState(false);
+            const [editing, setEditing] = useState(null);
+            const [form, setForm] = useState({ username: '', pin: '', nombre: '', email: '', rol: 'cajero' });
+
+            const handleSave = (e) => {
+                e.preventDefault();
+                if (!form.username || !form.pin || !form.nombre) return alert('Complete los campos obligatorios.');
+                if (editing) {
+                    setUsers(users.map(u => u.id === editing.id ? { ...u, ...form } : u));
+                } else {
+                    setUsers([...users, { id: Date.now().toString(), ...form }]);
+                }
+                setShowModal(false);
+                setEditing(null);
+                setForm({ username: '', pin: '', nombre: '', email: '', rol: 'cajero' });
+            };
+
+            return (
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-4xl mx-auto">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h3 className="text-lg font-bold">Gestión de Usuarios y Permisos</h3>
+                            <p className="text-xs text-slate-500">Administra cajeros, administradores y soporte técnico.</p>
+                        </div>
+                        <button
+                            onClick={() => { setEditing(null); setForm({ username: '', pin: '', nombre: '', email: '', rol: 'cajero' }); setShowModal(true); }}
+                            className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg font-semibold text-sm shadow"
+                        >
+                            + Nuevo Usuario
+                        </button>
+                    </div>
+
+                    <div className="overflow-x-auto border rounded-lg border-slate-200 dark:border-slate-700">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-100 dark:bg-slate-700/50">
+                                <tr>
+                                    <th className="p-3">Nombre</th>
+                                    <th className="p-3">Usuario</th>
+                                    <th className="p-3">Rol</th>
+                                    <th className="p-3 text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                                {users.map(u => (
+                                    <tr key={u.id}>
+                                        <td className="p-3 font-medium">{u.nombre}</td>
+                                        <td className="p-3 font-mono text-slate-600 dark:text-slate-300">{u.username}</td>
+                                        <td className="p-3"><span className="px-2 py-0.5 rounded text-xs font-bold uppercase bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300">{u.rol}</span></td>
+                                        <td className="p-3 text-center space-x-2">
+                                            <button onClick={() => { setEditing(u); setForm({ username: u.username, pin: u.pin, nombre: u.nombre, email: u.email || '', rol: u.rol || 'cajero' }); setShowModal(true); }} className="text-sky-600 text-xs bg-sky-50 dark:bg-slate-700 px-2.5 py-1 rounded font-medium">Editar</button>
+                                            {users.length > 1 && (
+                                                <button onClick={() => { if (confirm(`¿Eliminar a ${u.username}?`)) setUsers(users.filter(x => x.id !== u.id)); }} className="text-rose-500 text-xs bg-rose-50 dark:bg-slate-700 px-2.5 py-1 rounded font-medium">Eliminar</button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {showModal && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl border">
+                                <h3 className="text-lg font-bold">{editing ? 'Editar Usuario' : 'Nuevo Usuario'}</h3>
+                                <form onSubmit={handleSave} className="space-y-3">
                                     <div>
-                                        <label class="block text-xs font-semibold mb-1">Categoría</label>
-                                        <select
-                                            value={productForm.categoria}
-                                            onChange={e => setProductForm({ ...productForm, categoria: e.target.value })}
-                                            className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm"
-                                        >
-                                            <option value="Platos">Platos</option>
-                                            <option value="Bebidas">Bebidas</option>
-                                            <option value="Refrescos">Refrescos</option>
-                                            <option value="Postres">Postres</option>
-                                            <option value="Snacks">Snacks</option>
+                                        <label className="block text-xs font-semibold mb-1">Nombre Completo</label>
+                                        <input type="text" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} required className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Usuario (Login)</label>
+                                        <input type="text" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} required className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Contraseña / PIN</label>
+                                        <input type="password" value={form.pin} onChange={e => setForm({ ...form, pin: e.target.value })} required className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold mb-1">Rol</label>
+                                        <select value={form.rol} onChange={e => setForm({ ...form, rol: e.target.value })} className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm">
+                                            <option value="cajero">Cajero (Solo POS)</option>
+                                            <option value="admin">Administrador (Inventario y Compras)</option>
+                                            <option value="soporte">Soporte Técnico (Acceso Total)</option>
                                         </select>
                                     </div>
-
-                                    {/* OPCIONES DE PRECIO EDITABLE Y SUBMENÚ */}
-                                    <div class="p-3.5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50/60 dark:bg-sky-900/20 space-y-3">
-                                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                            <label class="flex items-center space-x-2 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-200">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={productForm.precioEditable}
-                                                    onChange={e => setProductForm({ ...productForm, precioEditable: e.target.checked })}
-                                                    className="w-4 h-4 text-sky-600 rounded"
-                                                />
-                                                <span>💲 Precio Editable en Facturación</span>
-                                            </label>
-
-                                            <label class="flex items-center space-x-2 cursor-pointer text-xs font-bold text-sky-700 dark:text-sky-300">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={productForm.tieneSubmenu}
-                                                    onChange={e => setProductForm({ ...productForm, tieneSubmenu: e.target.checked })}
-                                                    className="w-4 h-4 text-sky-600 rounded"
-                                                />
-                                                <span>🍽️ Artículo con Submenú</span>
-                                            </label>
-                                        </div>
-
-                                        {productForm.tieneSubmenu && (
-                                            <div class="space-y-3 pt-2 border-t border-sky-200 dark:border-sky-800">
-                                                <div>
-                                                    <label class="block text-[11px] font-bold uppercase text-slate-500 mb-1.5">
-                                                        1. Categorías de Submenú Activas:
-                                                    </label>
-                                                    <div class="grid grid-cols-2 gap-2">
-                                                        {[
-                                                            { key: 'arroces', label: 'Principal / Arroces' },
-                                                            { key: 'carnes', label: 'Carnes' },
-                                                            { key: 'ensaladas', label: 'Ensaladas' },
-                                                            { key: 'extras', label: 'Extras' }
-                                                        ].map(cat => {
-                                                            const isChecked = productForm.submenus.includes(cat.key);
-                                                            return (
-                                                                <label key={cat.key} class="flex items-center space-x-2 bg-white dark:bg-slate-800 p-2 rounded-lg border text-xs cursor-pointer">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={isChecked}
-                                                                        onChange={e => {
-                                                                            const updated = e.target.checked
-                                                                                ? [...productForm.submenus, cat.key]
-                                                                                : productForm.submenus.filter(x => x !== cat.key);
-                                                                            setProductForm({ ...productForm, submenus: updated });
-                                                                        }}
-                                                                        className="rounded text-sky-600"
-                                                                    />
-                                                                    <span class="font-medium">{cat.label}</span>
-                                                                </label>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-
-                                                <div>
-                                                    <div class="flex justify-between items-center mb-1">
-                                                        <label class="block text-[11px] font-bold uppercase text-slate-500">
-                                                            2. Filtrar Artículos del Submenú (Opcional):
-                                                        </label>
-                                                        {productForm.opcionesPermitidas.length > 0 && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setProductForm({ ...productForm, opcionesPermitidas: [] })}
-                                                                className="text-[10px] text-sky-600 hover:underline font-bold"
-                                                            >
-                                                                Seleccionar Todos
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                    <p class="text-[10px] text-slate-500 mb-2">
-                                                        Si no marcas ninguno, aparecerán todos los disponibles del día. Si marcas específicos (ej. para <strong>Porción</strong>: Arroz blanco, Moro, Pollo frito), solo saldrán esos.
-                                                    </p>
-                                                    <div class="max-h-36 overflow-y-auto bg-white dark:bg-slate-800 p-2 rounded-lg border grid grid-cols-2 gap-1.5">
-                                                        {[
-                                                            ...(productForm.submenus.includes('arroces') ? menuDiaConfig.arroces : []),
-                                                            ...(productForm.submenus.includes('carnes') ? menuDiaConfig.carnes : []),
-                                                            ...(productForm.submenus.includes('ensaladas') ? menuDiaConfig.ensaladas : []),
-                                                            ...(productForm.submenus.includes('extras') ? menuDiaConfig.extras : [])
-                                                        ].map(item => {
-                                                            const selected = productForm.opcionesPermitidas.includes(item.nombre);
-                                                            return (
-                                                                <label key={item.id} class="flex items-center space-x-1.5 text-xs p-1 hover:bg-slate-50 dark:hover:bg-slate-700 rounded cursor-pointer">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={selected}
-                                                                        onChange={e => {
-                                                                            const updated = e.target.checked
-                                                                                ? [...productForm.opcionesPermitidas, item.nombre]
-                                                                                : productForm.opcionesPermitidas.filter(x => x !== item.nombre);
-                                                                            setProductForm({ ...productForm, opcionesPermitidas: updated });
-                                                                        }}
-                                                                        className="rounded text-sky-600"
-                                                                    />
-                                                                    <span class="truncate">{item.nombre}</span>
-                                                                </label>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
+                                    <div className="flex justify-end gap-2 pt-2">
+                                        <button type="button" onClick={() => setShowModal(false)} className="bg-slate-500 text-white px-4 py-2 rounded-lg text-sm font-medium">Cancelar</button>
+                                        <button type="submit" className="bg-sky-500 text-white px-5 py-2 rounded-lg text-sm font-bold">Guardar</button>
                                     </div>
-
-                                    {/* IMAGEN */}
-                                    <div class="space-y-2 border p-3 rounded-xl bg-slate-50 dark:bg-slate-700/30">
-                                        <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 uppercase">Imagen del Artículo</label>
-                                        <div class="flex items-center space-x-3">
-                                            <div class="w-14 h-14 bg-slate-200 dark:bg-slate-700 rounded-lg overflow-hidden border flex-shrink-0">
-                                                {productForm.img ? (
-                                                    <img src={productForm.img} alt="Vista previa" class="w-full h-full object-cover" />
-                                                ) : (
-                                                    <div class="w-full h-full flex items-center justify-center text-slate-400 text-[10px]">Sin img</div>
-                                                )}
-                                            </div>
-                                            <div class="flex-1">
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={handleImageFileChange}
-                                                    className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-sky-50 file:text-sky-700 cursor-pointer"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="flex space-x-2 pt-2">
-                                    <button
-                                        onClick={handleSaveProduct}
-                                        className="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl transition shadow"
-                                    >
-                                        {editingProductId ? 'Actualizar Artículo' : 'Guardar Producto'}
-                                    </button>
-                                    <button
-                                        onClick={() => setShowProductModal(false)}
-                                        className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-bold py-3 rounded-xl transition"
-                                    >
-                                        Cancelar
-                                    </button>
-                                </div>
+                                </form>
                             </div>
                         </div>
                     )}
