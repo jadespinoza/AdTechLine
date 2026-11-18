@@ -493,7 +493,6 @@
                             { id: 'clients', label: 'Clientes & CxC', icon: 'users', roles: ['soporte', 'admin', 'cajero'] },
                             { id: 'suppliers', label: 'Proveedores & CxP', icon: 'truck', roles: ['soporte', 'admin'] },
                             { id: 'compras', label: 'Compras', icon: 'package', roles: ['soporte', 'admin'] },
-                            { id: 'config', label: 'Configuración', icon: 'settings', roles: ['soporte', 'admin'] },
                         ].filter(t => t.roles.includes(currentUser.rol)).map(tab => (
                             <button
                                 key={tab.id}
