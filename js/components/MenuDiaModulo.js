@@ -1,16 +1,33 @@
-const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig }) => {
+const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
     const [nuevoSubmenuNombre, setNuevoSubmenuNombre] = React.useState('');
     const [nuevoElementoTextos, setNuevoElementoTextos] = React.useState({});
+
+    // Inicializar fecha del menú (por defecto hoy en formato YYYY-MM-DD)
+    const fechaMenu = menuDiaConfig.fechaMenu || new Date().toISOString().split('T')[0];
+    const moneda = (negocioConfig && negocioConfig.moneda) ? negocioConfig.moneda : 'RD$';
+
+    React.useEffect(() => {
+        if (window.lucide) {
+            window.lucide.createIcons();
+        }
+    });
 
     const guardarCambios = (updatedConfig) => {
         setMenuDiaConfig(updatedConfig);
         localStorage.setItem('adtech_menu_dia_config', JSON.stringify(updatedConfig));
     };
 
+    const handleFechaChange = (nuevaFecha) => {
+        guardarCambios({
+            ...menuDiaConfig,
+            fechaMenu: nuevaFecha
+        });
+    };
+
     const handleAgregarSubmenu = (e) => {
         e.preventDefault();
         if (!nuevoSubmenuNombre.trim()) return alert('Ingrese el nombre del nuevo submenú.');
-        const key = nuevoSubmenuNombre.trim().toLowerCase().replace(/\s+/g, '_');
+        const key = nuevoSubmenuNombre.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '_');
 
         if (menuDiaConfig.submenusDinamicos && menuDiaConfig.submenusDinamicos[key]) {
             return alert('Ya existe un submenú con ese nombre.');
@@ -18,6 +35,7 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig }) => {
 
         const actualizado = {
             ...menuDiaConfig,
+            fechaMenu,
             submenusDinamicos: {
                 ...(menuDiaConfig.submenusDinamicos || {}),
                 [key]: {
@@ -39,7 +57,7 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig }) => {
         const targetSubmenu = { ...submenusActuales[key] };
 
         const nuevoElemento = {
-            id: 'elem-' + Date.now(),
+            id: 'elem-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
             nombre: texto.trim(),
             disponible: true
         };
@@ -49,10 +67,22 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig }) => {
 
         guardarCambios({
             ...menuDiaConfig,
+            fechaMenu,
             submenusDinamicos: submenusActuales
         });
 
         setNuevoElementoTextos({ ...nuevoElementoTextos, [key]: '' });
+    };
+
+    const handleToggleDisponible = (key, elemId) => {
+        const submenusActuales = { ...(menuDiaConfig.submenusDinamicos || {}) };
+        submenusActuales[key] = {
+            ...submenusActuales[key],
+            elementos: submenusActuales[key].elementos.map(el =>
+                el.id === elemId ? { ...el, disponible: el.disponible === false ? true : false } : el
+            )
+        };
+        guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
     };
 
     const handleEliminarElemento = (key, elemId) => {
@@ -61,114 +91,218 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig }) => {
             ...submenusActuales[key],
             elementos: submenusActuales[key].elementos.filter(e => e.id !== elemId)
         };
-        guardarCambios({ ...menuDiaConfig, submenusDinamicos: submenusActuales });
+        guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
     };
 
-    const handleEliminarSubmenu = (key) => {
-        if (confirm('¿Está seguro de eliminar todo este submenú?')) {
+    const handleEliminarSubmenu = (key, titulo) => {
+        if (confirm(`¿Está seguro de eliminar toda la categoría "${titulo}"?`)) {
             const submenusActuales = { ...(menuDiaConfig.submenusDinamicos || {}) };
             delete submenusActuales[key];
-            guardarCambios({ ...menuDiaConfig, submenusDinamicos: submenusActuales });
+            guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
         }
     };
 
+    const handleRenombrarSubmenu = (key, nuevoTitulo) => {
+        const submenusActuales = { ...menuDiaConfig.submenusDinamicos };
+        submenusActuales[key] = { ...submenusActuales[key], titulo: nuevoTitulo };
+        guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
+    };
+
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-4xl mx-auto">
-            <div className="flex justify-between items-center border-b pb-4">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-6xl mx-auto">
+            {/* ENCABEZADO SUPERIOR + FECHA DEL MENÚ */}
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 border-b border-slate-200 dark:border-slate-700 pb-5">
                 <div>
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-white">🍽️ Configuración Dinámica del Menú del Día</h2>
-                    <p className="text-xs text-slate-500">Crea nuevos submenús, modifica títulos y administra elementos personalizados.</p>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-white">
+                        Gestión de Menú del Día &amp; Disponibilidad
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Active o desactive los acompañamientos y carnes disponibles para el día seleccionado.
+                    </p>
                 </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Precio Base Plato del Día:</label>
+
+                <div className="flex items-center gap-3 self-start md:self-auto">
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                        Fecha del Menú:
+                    </label>
                     <input
-                        type="number"
-                        value={menuDiaConfig.precioBase || 200}
-                        onChange={e => guardarCambios({ ...menuDiaConfig, precioBase: Number(e.target.value) })}
-                        className="w-32 p-2 bg-slate-50 dark:bg-slate-700 border rounded font-bold text-sky-600 text-sm"
+                        type="date"
+                        value={fechaMenu}
+                        onChange={e => handleFechaChange(e.target.value)}
+                        className="bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-100 shadow-sm focus:ring-2 focus:ring-sky-500 outline-none"
                     />
                 </div>
             </div>
 
-            <form onSubmit={handleAgregarSubmenu} className="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border flex flex-col sm:flex-row gap-3 items-end">
+            {/* FORMULARIO PARA CREAR NUEVO SUBMENÚ */}
+            <form
+                onSubmit={handleAgregarSubmenu}
+                className="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row gap-3 items-end"
+            >
                 <div className="flex-1 w-full">
-                    <label className="block text-xs font-semibold mb-1">Nombre del Nuevo Submenú (Ej. Postres, Sopas, Jugos)</label>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                        Nombre del Nuevo Submenú (Ej. Postres, Sopas, Jugos)
+                    </label>
                     <input
                         type="text"
                         placeholder="Nombre de la categoría..."
                         value={nuevoSubmenuNombre}
                         onChange={e => setNuevoSubmenuNombre(e.target.value)}
-                        className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm"
+                        className="w-full p-2.5 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
                     />
                 </div>
                 <button
                     type="submit"
-                    className="bg-sky-500 hover:bg-sky-600 text-white font-bold px-4 py-2.5 rounded-lg text-sm transition whitespace-nowrap shadow"
+                    className="bg-sky-500 hover:bg-sky-600 text-white font-bold px-5 py-2.5 rounded-lg text-sm transition whitespace-nowrap shadow-sm flex items-center gap-1.5"
                 >
-                    + Crear Submenú
+                    <span>+ Crear Submenú</span>
                 </button>
             </form>
 
-            <div className="space-y-6">
-                {menuDiaConfig.submenusDinamicos && Object.keys(menuDiaConfig.submenusDinamicos).length > 0 ? (
-                    Object.entries(menuDiaConfig.submenusDinamicos).map(([key, submenu]) => (
-                        <div key={key} className="bg-slate-50 dark:bg-slate-700/30 p-5 rounded-xl border border-slate-200 dark:border-slate-700 space-y-4">
-                            <div className="flex justify-between items-center">
-                                <input
-                                    type="text"
-                                    value={submenu.titulo}
-                                    onChange={e => {
-                                        const submenusActuales = { ...menuDiaConfig.submenusDinamicos };
-                                        submenusActuales[key] = { ...submenusActuales[key], titulo: e.target.value };
-                                        guardarCambios({ ...menuDiaConfig, submenusDinamicos: submenusActuales });
-                                    }}
-                                    className="font-bold text-base bg-transparent border-b border-dashed border-sky-400 focus:outline-none text-sky-600 dark:text-sky-400"
-                                />
-                                <button
-                                    onClick={() => handleEliminarSubmenu(key)}
-                                    className="text-rose-500 hover:text-rose-700 text-xs font-bold bg-rose-50 dark:bg-slate-700 px-2.5 py-1 rounded"
-                                >
-                                    Eliminar Submenú
-                                </button>
-                            </div>
-
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder={`Agregar opción en ${submenu.titulo}...`}
-                                    value={nuevoElementoTextos[key] || ''}
-                                    onChange={e => setNuevoElementoTextos({ ...nuevoElementoTextos, [key]: e.target.value })}
-                                    className="flex-1 p-2 bg-white dark:bg-slate-800 border rounded-lg text-sm"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => handleAgregarElemento(key)}
-                                    className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-4 py-2 rounded-lg text-sm shadow"
-                                >
-                                    + Agregar
-                                </button>
-                            </div>
-
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-2">
-                                {submenu.elementos && submenu.elementos.map(elem => (
-                                    <div key={elem.id} className="flex justify-between items-center bg-white dark:bg-slate-800 p-2.5 rounded-lg border shadow-sm">
-                                        <span className="text-sm font-medium">{elem.nombre}</span>
-                                        <button
-                                            onClick={() => handleEliminarElemento(key, elem.id)}
-                                            className="text-rose-500 hover:text-rose-700 font-bold text-xs"
-                                        >
-                                            ✕
-                                        </button>
+            {/* CUADRÍCULA DE 2 COLUMNAS PARA LOS SUBMENÚS */}
+            {menuDiaConfig.submenusDinamicos && Object.keys(menuDiaConfig.submenusDinamicos).length > 0 ? (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {Object.entries(menuDiaConfig.submenusDinamicos).map(([key, submenu]) => (
+                        <div
+                            key={key}
+                            className="bg-slate-50/80 dark:bg-slate-700/30 p-5 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between space-y-4 shadow-sm"
+                        >
+                            <div className="space-y-4">
+                                {/* CABECERA DE TARJETA: TÍTULO EDITABLE + ELIMINAR SUBMENÚ */}
+                                <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-600/60">
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                        <input
+                                            type="text"
+                                            value={submenu.titulo}
+                                            onChange={e => handleRenombrarSubmenu(key, e.target.value)}
+                                            title="Haz clic para cambiar el nombre de esta categoría"
+                                            className="font-bold text-sm uppercase tracking-wide bg-transparent border-b border-transparent hover:border-sky-400 focus:border-sky-500 focus:bg-white dark:focus:bg-slate-800 px-1 py-0.5 rounded focus:outline-none text-sky-700 dark:text-sky-400 w-full truncate"
+                                        />
                                     </div>
-                                ))}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleEliminarSubmenu(key, submenu.titulo)}
+                                        title="Eliminar Submenú"
+                                        className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/30 p-1.5 rounded-lg transition text-xs font-semibold flex items-center gap-1 flex-shrink-0"
+                                    >
+                                        <i data-lucide="trash-2" style={{ width: 15, height: 15 }} className="inline-block"></i>
+                                    </button>
+                                </div>
+
+                                {/* BARRA RÁPIDA PARA AGREGAR NUEVO ELEMENTO DENTRO DEL SUBMENÚ */}
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder={`Nuevo ítem en ${submenu.titulo}...`}
+                                        value={nuevoElementoTextos[key] || ''}
+                                        onChange={e => setNuevoElementoTextos({ ...nuevoElementoTextos, [key]: e.target.value })}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleAgregarElemento(key);
+                                            }
+                                        }}
+                                        className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleAgregarElemento(key)}
+                                        className="bg-sky-500 hover:bg-sky-600 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition whitespace-nowrap shadow-sm"
+                                    >
+                                        + Agregar
+                                    </button>
+                                </div>
+
+                                {/* LISTA DE ELEMENTOS CON CHECKBOX DISPONIBLE / AGOTADO Y BOTÓN ELIMINAR */}
+                                <div className="space-y-2.5">
+                                    {submenu.elementos && submenu.elementos.length > 0 ? (
+                                        submenu.elementos.map(elem => {
+                                            const isDisponible = elem.disponible !== false;
+                                            return (
+                                                <div
+                                                    key={elem.id}
+                                                    className={`flex items-center justify-between bg-white dark:bg-slate-800 px-3.5 py-2.5 rounded-lg border transition shadow-sm ${
+                                                        isDisponible
+                                                            ? 'border-slate-200 dark:border-slate-700'
+                                                            : 'border-rose-200/80 dark:border-rose-900/50 bg-slate-50/70 dark:bg-slate-800/60'
+                                                    }`}
+                                                >
+                                                    <span
+                                                        className={`text-sm font-medium pr-2 truncate ${
+                                                            isDisponible
+                                                                ? 'text-slate-700 dark:text-slate-200'
+                                                                : 'text-slate-400 dark:text-slate-500 line-through'
+                                                        }`}
+                                                    >
+                                                        {elem.nombre}
+                                                    </span>
+
+                                                    <div className="flex items-center gap-3 flex-shrink-0">
+                                                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isDisponible}
+                                                                onChange={() => handleToggleDisponible(key, elem.id)}
+                                                                className="w-4 h-4 rounded text-sky-500 focus:ring-sky-500 cursor-pointer accent-sky-500"
+                                                            />
+                                                            <span
+                                                                className={`text-xs font-semibold ${
+                                                                    isDisponible
+                                                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                                                        : 'text-rose-500 dark:text-rose-400'
+                                                                }`}
+                                                            >
+                                                                {isDisponible ? 'Disponible' : 'Agotado'}
+                                                            </span>
+                                                        </label>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleEliminarElemento(key, elem.id)}
+                                                            title="Eliminar opción"
+                                                            className="text-rose-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 dark:hover:bg-slate-700 transition"
+                                                        >
+                                                            <i data-lucide="trash-2" style={{ width: 15, height: 15 }} className="inline-block"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <p className="text-xs text-slate-400 text-center py-4 italic">
+                                            Sin elementos agregados en esta categoría.
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    ))
-                ) : (
-                    <div className="text-center py-8 text-slate-400 text-sm">
-                        No hay submenús dinámicos creados. Utiliza el formulario superior para agregar categorías.
-                    </div>
-                )}
+                    ))}
+                </div>
+            ) : (
+                <div className="text-center py-10 text-slate-400 text-sm bg-slate-50 dark:bg-slate-700/20 rounded-xl border border-dashed">
+                    No hay submenús creados. Utiliza el formulario superior para agregar categorías como Arroces, Carnes, Ensaladas o Extras.
+                </div>
+            )}
+
+            {/* PIE DE TARJETA: PRECIO BASE DEL PLATO DEL DÍA */}
+            <div className="bg-slate-50 dark:bg-slate-700/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h3 className="text-sm font-bold text-sky-700 dark:text-sky-400">
+                        Precio Base del Plato del Día
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Precio estándar aplicable al armar el plato en facturación.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-bold text-slate-600 dark:text-slate-300">{moneda}</span>
+                    <input
+                        type="number"
+                        value={menuDiaConfig.precioBase || 200}
+                        onChange={e => guardarCambios({ ...menuDiaConfig, fechaMenu, precioBase: Number(e.target.value) })}
+                        className="w-28 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg font-bold text-slate-800 dark:text-white text-center text-sm shadow-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                    />
+                </div>
             </div>
         </div>
     );
