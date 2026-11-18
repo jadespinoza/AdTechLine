@@ -1,7 +1,10 @@
 const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
     const [nuevoSubmenuNombre, setNuevoSubmenuNombre] = React.useState('');
     const [nuevoElementoTextos, setNuevoElementoTextos] = React.useState({});
-    const [nuevoElementoEsBase, setNuevoElementoEsBase] = React.useState({});
+    
+    // Estado para modal de edición de ítem
+    const [editingItem, setEditingItem] = React.useState(null); // { keySubmenu, item }
+    const [editItemForm, setEditItemForm] = React.useState({ nombre: '', submenusDesactivados: [] });
 
     const fechaMenu = menuDiaConfig.fechaMenu || new Date().toISOString().split('T')[0];
     const moneda = (negocioConfig && negocioConfig.moneda) ? negocioConfig.moneda : 'RD$';
@@ -50,9 +53,9 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
     };
 
     const handleAgregarElemento = (key) => {
+        // Solo permitir agregar si la categoría es la principal (o permitir en cualquiera, pero la regla de carnes aplica especialmente al principal)
         const texto = nuevoElementoTextos[key];
         if (!texto || !texto.trim()) return alert('Escriba el nombre del elemento a agregar.');
-        const esPlatoBase = nuevoElementoEsBase[key] || false;
 
         const submenusActuales = { ...(menuDiaConfig.submenusDinamicos || {}) };
         const targetSubmenu = { ...submenusActuales[key] };
@@ -61,7 +64,7 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
             id: 'elem-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
             nombre: texto.trim(),
             disponible: true,
-            esPlatoBase: esPlatoBase // Si es true, el sistema sabe que es plato fuerte (ej. Locrio) y no requiere que el usuario elija otra carne obligatoriamente
+            submenusDesactivados: [] // Lista de keys de submenús que este ítem desactiva (ej. ['carnes'])
         };
 
         targetSubmenu.elementos = [...(targetSubmenu.elementos || []), nuevoElemento];
@@ -74,7 +77,6 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
         });
 
         setNuevoElementoTextos({ ...nuevoElementoTextos, [key]: '' });
-        setNuevoElementoEsBase({ ...nuevoElementoEsBase, [key]: false });
     };
 
     const handleToggleDisponible = (key, elemId) => {
@@ -88,17 +90,6 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
         guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
     };
 
-    const handleTogglePlatoBase = (key, elemId) => {
-        const submenusActuales = { ...(menuDiaConfig.submenusDinamicos || {}) };
-        submenusActuales[key] = {
-            ...submenusActuales[key],
-            elementos: submenusActuales[key].elementos.map(el =>
-                el.id === elemId ? { ...el, esPlatoBase: !el.esPlatoBase } : el
-            )
-        };
-        guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
-    };
-
     const handleEliminarElemento = (key, elemId) => {
         const submenusActuales = { ...(menuDiaConfig.submenusDinamicos || {}) };
         submenusActuales[key] = {
@@ -106,6 +97,34 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
             elementos: submenusActuales[key].elementos.filter(e => e.id !== elemId)
         };
         guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
+    };
+
+    const handleAbrirEdicionItem = (keySubmenu, item) => {
+        setEditingItem({ keySubmenu, itemId: item.id });
+        setEditItemForm({
+            nombre: item.nombre,
+            submenusDesactivados: item.submenusDesactivados || []
+        });
+    };
+
+    const handleGuardarEdicionItem = () => {
+        if (!editingItem) return;
+        if (!editItemForm.nombre.trim()) return alert('El nombre no puede estar vacío.');
+
+        const { keySubmenu, itemId } = editingItem;
+        const submenusActuales = { ...(menuDiaConfig.submenusDinamicos || {}) };
+        const submenuObj = submenusActuales[keySubmenu];
+
+        if (submenuObj && submenuObj.elementos) {
+            submenuObj.elementos = submenuObj.elementos.map(el => 
+                el.id === itemId 
+                    ? { ...el, nombre: editItemForm.nombre.trim(), submenusDesactivados: editItemForm.submenusDesactivados }
+                    : el
+            );
+        }
+
+        guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
+        setEditingItem(null);
     };
 
     const handleEliminarSubmenu = (key, titulo) => {
@@ -122,6 +141,9 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
         guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
     };
 
+    // Identificar si esta categoría es la primera (Arroces / Principales) u otra
+    const subkeys = menuDiaConfig.submenusDinamicos ? Object.keys(menuDiaConfig.submenusDinamicos) : [];
+
     return (
         <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-md border border-slate-200 dark:border-slate-700 space-y-6 max-w-6xl mx-auto">
             {/* ENCABEZADO SUPERIOR + FECHA DEL MENÚ */}
@@ -131,7 +153,7 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
                         Gestión de Menú del Día &amp; Disponibilidad
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Active o desactive los acompañamientos y carnes, y marque cuáles arroces/platos son independientes (ej. Locrio no lleva carne).
+                        Active o desactive acompañamientos y carnes. En el submenú principal, configure qué submenús se desactivan (ej. Locrio desactiva carnes).
                     </p>
                 </div>
 
@@ -174,37 +196,38 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
             </form>
 
             {/* CUADRÍCULA DE 2 COLUMNAS PARA LOS SUBMENÚS */}
-            {menuDiaConfig.submenusDinamicos && Object.keys(menuDiaConfig.submenusDinamicos).length > 0 ? (
+            {menuDiaConfig.submenusDinamicos && subkeys.length > 0 ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {Object.entries(menuDiaConfig.submenusDinamicos).map(([key, submenu]) => (
-                        <div
-                            key={key}
-                            className="bg-slate-50/80 dark:bg-slate-700/30 p-5 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between space-y-4 shadow-sm"
-                        >
-                            <div className="space-y-4">
-                                {/* CABECERA DE TARJETA: TÍTULO EDITABLE + ELIMINAR SUBMENÚ */}
-                                <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-600/60">
-                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                        <input
-                                            type="text"
-                                            value={submenu.titulo}
-                                            onChange={e => handleRenombrarSubmenu(key, e.target.value)}
-                                            title="Haz clic para cambiar el nombre de esta categoría"
-                                            className="font-bold text-sm uppercase tracking-wide bg-transparent border-b border-transparent hover:border-sky-400 focus:border-sky-500 focus:bg-white dark:focus:bg-slate-800 px-1 py-0.5 rounded focus:outline-none text-sky-700 dark:text-sky-400 w-full truncate"
-                                        />
+                    {Object.entries(menuDiaConfig.submenusDinamicos).map(([key, submenu], index) => {
+                        const esPrincipal = index === 0; // El primer submenú (ej. Arroces / Principales)
+                        return (
+                            <div
+                                key={key}
+                                className="bg-slate-50/80 dark:bg-slate-700/30 p-5 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between space-y-4 shadow-sm"
+                            >
+                                <div className="space-y-4">
+                                    {/* CABECERA DE TARJETA: TÍTULO EDITABLE + ELIMINAR SUBMENÚ */}
+                                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/80 dark:border-slate-600/60">
+                                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                            <input
+                                                type="text"
+                                                value={submenu.titulo}
+                                                onChange={e => handleRenombrarSubmenu(key, e.target.value)}
+                                                title="Haz clic para cambiar el nombre de esta categoría"
+                                                className="font-bold text-sm uppercase tracking-wide bg-transparent border-b border-transparent hover:border-sky-400 focus:border-sky-500 focus:bg-white dark:focus:bg-slate-800 px-1 py-0.5 rounded focus:outline-none text-sky-700 dark:text-sky-400 w-full truncate"
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleEliminarSubmenu(key, submenu.titulo)}
+                                            title="Eliminar Submenú"
+                                            className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/30 p-1.5 rounded-lg transition text-xs font-semibold flex items-center gap-1 flex-shrink-0"
+                                        >
+                                            <i data-lucide="trash-2" style={{ width: 15, height: 15 }} className="inline-block"></i>
+                                        </button>
                                     </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleEliminarSubmenu(key, submenu.titulo)}
-                                        title="Eliminar Submenú"
-                                        className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/30 p-1.5 rounded-lg transition text-xs font-semibold flex items-center gap-1 flex-shrink-0"
-                                    >
-                                        <i data-lucide="trash-2" style={{ width: 15, height: 15 }} className="inline-block"></i>
-                                    </button>
-                                </div>
 
-                                {/* BARRA PARA AGREGAR NUEVO ELEMENTO + CHECKBOX DE PLATO INDEPENDIENTE */}
-                                <div className="space-y-2 bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    {/* BARRA RÁPIDA PARA AGREGAR NUEVO ELEMENTO */}
                                     <div className="flex gap-2">
                                         <input
                                             type="text"
@@ -217,7 +240,7 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
                                                     handleAgregarElemento(key);
                                                 }
                                             }}
-                                            className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                            className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
                                         />
                                         <button
                                             type="button"
@@ -227,110 +250,170 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
                                             + Agregar
                                         </button>
                                     </div>
-                                    <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
-                                        <input
-                                            type="checkbox"
-                                            checked={nuevoElementoEsBase[key] || false}
-                                            onChange={e => setNuevoElementoEsBase({ ...nuevoElementoEsBase, [key]: e.target.checked })}
-                                            className="w-4 h-4 rounded text-sky-500 focus:ring-sky-500 cursor-pointer accent-sky-500"
-                                        />
-                                        <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                            Es plato independiente / plato fuerte (No requiere carne, ej. Locrio)
-                                        </span>
-                                    </label>
-                                </div>
 
-                                {/* LISTA DE ELEMENTOS */}
-                                <div className="space-y-2.5">
-                                    {submenu.elementos && submenu.elementos.length > 0 ? (
-                                        submenu.elementos.map(elem => {
-                                            const isDisponible = elem.disponible !== false;
-                                            const isPlatoBase = elem.esPlatoBase === true;
-                                            return (
-                                                <div
-                                                    key={elem.id}
-                                                    className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white dark:bg-slate-800 px-3.5 py-2.5 rounded-lg border transition shadow-sm ${
-                                                        isDisponible
-                                                            ? 'border-slate-200 dark:border-slate-700'
-                                                            : 'border-rose-200/80 dark:border-rose-900/50 bg-slate-50/70 dark:bg-slate-800/60'
-                                                    }`}
-                                                >
-                                                    <div className="flex flex-col min-w-0 pr-2">
-                                                        <span
-                                                            className={`text-sm font-medium truncate ${
-                                                                isDisponible
-                                                                    ? 'text-slate-700 dark:text-slate-200'
-                                                                    : 'text-slate-400 dark:text-slate-500 line-through'
-                                                            }`}
-                                                        >
-                                                            {elem.nombre}
-                                                        </span>
-                                                        {isPlatoBase && (
-                                                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
-                                                                ⭐ Plato independiente (No requiere carne)
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="flex items-center gap-3 flex-shrink-0 self-end sm:self-auto">
-                                                        {/* Botón para marcar/desmarcar si es plato base */}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleTogglePlatoBase(key, elem.id)}
-                                                            title={isPlatoBase ? "Quitar condición de plato independiente" : "Marcar como plato independiente (sin carne)"}
-                                                            className={`px-2 py-1 rounded text-[11px] font-bold transition border ${
-                                                                isPlatoBase
-                                                                    ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
-                                                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
-                                                            }`}
-                                                        >
-                                                            {isPlatoBase ? 'Independiente' : 'Requiere Carne'}
-                                                        </button>
-
-                                                        {/* Checkbox Disponible / Agotado */}
-                                                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={isDisponible}
-                                                                onChange={() => handleToggleDisponible(key, elem.id)}
-                                                                className="w-4 h-4 rounded text-sky-500 focus:ring-sky-500 cursor-pointer accent-sky-500"
-                                                            />
+                                    {/* LISTA DE ELEMENTOS */}
+                                    <div className="space-y-2.5">
+                                        {submenu.elementos && submenu.elementos.length > 0 ? (
+                                            submenu.elementos.map(elem => {
+                                                const isDisponible = elem.disponible !== false;
+                                                const descCount = (elem.submenusDesactivados || []).length;
+                                                return (
+                                                    <div
+                                                        key={elem.id}
+                                                        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white dark:bg-slate-800 px-3.5 py-2.5 rounded-lg border transition shadow-sm ${
+                                                            isDisponible
+                                                                ? 'border-slate-200 dark:border-slate-700'
+                                                                : 'border-rose-200/80 dark:border-rose-900/50 bg-slate-50/70 dark:bg-slate-800/60'
+                                                        }`}
+                                                    >
+                                                        <div className="flex flex-col min-w-0 pr-2">
                                                             <span
-                                                                className={`text-xs font-semibold ${
+                                                                className={`text-sm font-medium truncate ${
                                                                     isDisponible
-                                                                        ? 'text-emerald-600 dark:text-emerald-400'
-                                                                        : 'text-rose-500 dark:text-rose-400'
+                                                                        ? 'text-slate-700 dark:text-slate-200'
+                                                                        : 'text-slate-400 dark:text-slate-500 line-through'
                                                                 }`}
                                                             >
-                                                                {isDisponible ? 'Disponible' : 'Agotado'}
+                                                                {elem.nombre}
                                                             </span>
-                                                        </label>
+                                                            {esPrincipal && descCount > 0 && (
+                                                                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                                                                    ⚠️ Desactiva: {(elem.submenusDesactivados || []).map(sk => menuDiaConfig.submenusDinamicos[sk]?.titulo || sk).join(', ')}
+                                                                </span>
+                                                            )}
+                                                        </div>
 
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleEliminarElemento(key, elem.id)}
-                                                            title="Eliminar opción"
-                                                            className="text-rose-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 dark:hover:bg-slate-700 transition"
-                                                        >
-                                                            <i data-lucide="trash-2" style={{ width: 15, height: 15 }} className="inline-block"></i>
-                                                        </button>
+                                                        <div className="flex items-center gap-2.5 flex-shrink-0 self-end sm:self-auto">
+                                                            {/* Botón Editar Ítem */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleAbrirEdicionItem(key, elem)}
+                                                                title="Editar este ítem y configurar submenús que desactiva"
+                                                                className="text-sky-500 hover:text-sky-700 bg-sky-50 dark:bg-slate-700 p-1.5 rounded transition"
+                                                            >
+                                                                <i data-lucide="edit" style={{ width: 14, height: 14 }} className="inline-block"></i>
+                                                            </button>
+
+                                                            {/* Checkbox Disponible / Agotado */}
+                                                            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isDisponible}
+                                                                    onChange={() => handleToggleDisponible(key, elem.id)}
+                                                                    className="w-4 h-4 rounded text-sky-500 focus:ring-sky-500 cursor-pointer accent-sky-500"
+                                                                />
+                                                                <span
+                                                                    className={`text-xs font-semibold ${
+                                                                        isDisponible
+                                                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                                                            : 'text-rose-500 dark:text-rose-400'
+                                                                    }`}
+                                                                >
+                                                                    {isDisponible ? 'Disponible' : 'Agotado'}
+                                                                </span>
+                                                            </label>
+
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleEliminarElemento(key, elem.id)}
+                                                                title="Eliminar opción"
+                                                                className="text-rose-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 dark:hover:bg-slate-700 transition"
+                                                            >
+                                                                <i data-lucide="trash-2" style={{ width: 15, height: 15 }} className="inline-block"></i>
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        })
-                                    ) : (
-                                        <p className="text-xs text-slate-400 text-center py-4 italic">
-                                            Sin elementos agregados en esta categoría.
-                                        </p>
-                                    )}
+                                                );
+                                            })
+                                        ) : (
+                                            <p className="text-xs text-slate-400 text-center py-4 italic">
+                                                Sin elementos agregados en esta categoría.
+                                            </p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             ) : (
                 <div className="text-center py-10 text-slate-400 text-sm bg-slate-50 dark:bg-slate-700/20 rounded-xl border border-dashed">
                     No hay submenús creados. Utiliza el formulario superior para agregar categorías como Arroces, Carnes, Ensaladas o Extras.
+                </div>
+            )}
+
+            {/* MODAL PARA EDITAR ÍTEM & CONFIGURAR SUBMENÚS QUE DESACTIVA */}
+            {editingItem && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="text-lg font-bold">Editar Elemento / Ítem</h3>
+                            <button onClick={() => setEditingItem(null)} className="text-slate-400 hover:text-slate-600">
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold mb-1">Nombre del Ítem</label>
+                                <input
+                                    type="text"
+                                    value={editItemForm.nombre}
+                                    onChange={e => setEditItemForm({ ...editItemForm, nombre: e.target.value })}
+                                    className="w-full p-2.5 border rounded-lg dark:bg-slate-700 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                />
+                            </div>
+
+                            {/* Mostrar sección para desactivar submenús si estamos en el submenú principal */}
+                            <div className="bg-slate-50 dark:bg-slate-700/40 p-3.5 rounded-xl border space-y-2">
+                                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 uppercase">
+                                    Submenús que este ítem DESACTIVA al seleccionarse:
+                                </label>
+                                <p className="text-[11px] text-slate-500">
+                                    Por ejemplo, si seleccionas <strong>Locrio</strong> y no lleva carnes, marca el submenú <strong>Carnes</strong> para ocultarlo automáticamente al armar el plato.
+                                </p>
+                                <div className="space-y-1.5 pt-1">
+                                    {Object.entries(menuDiaConfig.submenusDinamicos || {})
+                                        .filter(([k]) => k !== editingItem.keySubmenu) // No desactivar su propio submenú
+                                        .map(([k, sub]) => {
+                                            const isChecked = editItemForm.submenusDesactivados.includes(k);
+                                            return (
+                                                <label key={k} className="flex items-center space-x-2 text-xs p-1.5 bg-white dark:bg-slate-800 rounded border cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={e => {
+                                                            const current = editItemForm.submenusDesactivados;
+                                                            const updated = e.target.checked
+                                                                ? [...current, k]
+                                                                : current.filter(x => x !== k);
+                                                            setEditItemForm({ ...editItemForm, submenusDesactivados: updated });
+                                                        }}
+                                                        className="rounded text-sky-600"
+                                                    />
+                                                    <span className="font-medium text-slate-800 dark:text-slate-200">Desactivar categoría: <strong>{sub.titulo}</strong></span>
+                                                </label>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex space-x-2 pt-2">
+                            <button
+                                onClick={handleGuardarEdicionItem}
+                                className="flex-1 bg-sky-500 hover:bg-sky-600 text-white font-bold py-2.5 rounded-xl transition shadow text-sm"
+                            >
+                                Guardar Cambios
+                            </button>
+                            <button
+                                onClick={() => setEditingItem(null)}
+                                className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 font-bold py-2.5 rounded-xl transition text-sm"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
