@@ -5,6 +5,7 @@
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#0284c7",
+  "scale" = "0.65",
   "icons": [
     {
       "src": "./assets/favicon.png",
