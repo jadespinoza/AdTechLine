@@ -1,8 +1,8 @@
 const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
     const [nuevoSubmenuNombre, setNuevoSubmenuNombre] = React.useState('');
     const [nuevoElementoTextos, setNuevoElementoTextos] = React.useState({});
+    const [nuevoElementoEsBase, setNuevoElementoEsBase] = React.useState({});
 
-    // Inicializar fecha del menú (por defecto hoy en formato YYYY-MM-DD)
     const fechaMenu = menuDiaConfig.fechaMenu || new Date().toISOString().split('T')[0];
     const moneda = (negocioConfig && negocioConfig.moneda) ? negocioConfig.moneda : 'RD$';
 
@@ -52,6 +52,7 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
     const handleAgregarElemento = (key) => {
         const texto = nuevoElementoTextos[key];
         if (!texto || !texto.trim()) return alert('Escriba el nombre del elemento a agregar.');
+        const esPlatoBase = nuevoElementoEsBase[key] || false;
 
         const submenusActuales = { ...(menuDiaConfig.submenusDinamicos || {}) };
         const targetSubmenu = { ...submenusActuales[key] };
@@ -59,7 +60,8 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
         const nuevoElemento = {
             id: 'elem-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
             nombre: texto.trim(),
-            disponible: true
+            disponible: true,
+            esPlatoBase: esPlatoBase // Si es true, el sistema sabe que es plato fuerte (ej. Locrio) y no requiere que el usuario elija otra carne obligatoriamente
         };
 
         targetSubmenu.elementos = [...(targetSubmenu.elementos || []), nuevoElemento];
@@ -72,6 +74,7 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
         });
 
         setNuevoElementoTextos({ ...nuevoElementoTextos, [key]: '' });
+        setNuevoElementoEsBase({ ...nuevoElementoEsBase, [key]: false });
     };
 
     const handleToggleDisponible = (key, elemId) => {
@@ -80,6 +83,17 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
             ...submenusActuales[key],
             elementos: submenusActuales[key].elementos.map(el =>
                 el.id === elemId ? { ...el, disponible: el.disponible === false ? true : false } : el
+            )
+        };
+        guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
+    };
+
+    const handleTogglePlatoBase = (key, elemId) => {
+        const submenusActuales = { ...(menuDiaConfig.submenusDinamicos || {}) };
+        submenusActuales[key] = {
+            ...submenusActuales[key],
+            elementos: submenusActuales[key].elementos.map(el =>
+                el.id === elemId ? { ...el, esPlatoBase: !el.esPlatoBase } : el
             )
         };
         guardarCambios({ ...menuDiaConfig, fechaMenu, submenusDinamicos: submenusActuales });
@@ -117,7 +131,7 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
                         Gestión de Menú del Día &amp; Disponibilidad
                     </h2>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        Active o desactive los acompañamientos y carnes disponibles para el día seleccionado.
+                        Active o desactive los acompañamientos y carnes, y marque cuáles arroces/platos son independientes (ej. Locrio no lleva carne).
                     </p>
                 </div>
 
@@ -189,55 +203,91 @@ const MenuDiaModulo = ({ menuDiaConfig, setMenuDiaConfig, negocioConfig }) => {
                                     </button>
                                 </div>
 
-                                {/* BARRA RÁPIDA PARA AGREGAR NUEVO ELEMENTO DENTRO DEL SUBMENÚ */}
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        placeholder={`Nuevo ítem en ${submenu.titulo}...`}
-                                        value={nuevoElementoTextos[key] || ''}
-                                        onChange={e => setNuevoElementoTextos({ ...nuevoElementoTextos, [key]: e.target.value })}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter') {
-                                                e.preventDefault();
-                                                handleAgregarElemento(key);
-                                            }
-                                        }}
-                                        className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => handleAgregarElemento(key)}
-                                        className="bg-sky-500 hover:bg-sky-600 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition whitespace-nowrap shadow-sm"
-                                    >
-                                        + Agregar
-                                    </button>
+                                {/* BARRA PARA AGREGAR NUEVO ELEMENTO + CHECKBOX DE PLATO INDEPENDIENTE */}
+                                <div className="space-y-2 bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder={`Nuevo ítem en ${submenu.titulo}...`}
+                                            value={nuevoElementoTextos[key] || ''}
+                                            onChange={e => setNuevoElementoTextos({ ...nuevoElementoTextos, [key]: e.target.value })}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleAgregarElemento(key);
+                                                }
+                                            }}
+                                            className="flex-1 px-3 py-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAgregarElemento(key)}
+                                            className="bg-sky-500 hover:bg-sky-600 text-white font-semibold px-3 py-1.5 rounded-lg text-xs transition whitespace-nowrap shadow-sm"
+                                        >
+                                            + Agregar
+                                        </button>
+                                    </div>
+                                    <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={nuevoElementoEsBase[key] || false}
+                                            onChange={e => setNuevoElementoEsBase({ ...nuevoElementoEsBase, [key]: e.target.checked })}
+                                            className="w-4 h-4 rounded text-sky-500 focus:ring-sky-500 cursor-pointer accent-sky-500"
+                                        />
+                                        <span className="text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                            Es plato independiente / plato fuerte (No requiere carne, ej. Locrio)
+                                        </span>
+                                    </label>
                                 </div>
 
-                                {/* LISTA DE ELEMENTOS CON CHECKBOX DISPONIBLE / AGOTADO Y BOTÓN ELIMINAR */}
+                                {/* LISTA DE ELEMENTOS */}
                                 <div className="space-y-2.5">
                                     {submenu.elementos && submenu.elementos.length > 0 ? (
                                         submenu.elementos.map(elem => {
                                             const isDisponible = elem.disponible !== false;
+                                            const isPlatoBase = elem.esPlatoBase === true;
                                             return (
                                                 <div
                                                     key={elem.id}
-                                                    className={`flex items-center justify-between bg-white dark:bg-slate-800 px-3.5 py-2.5 rounded-lg border transition shadow-sm ${
+                                                    className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-white dark:bg-slate-800 px-3.5 py-2.5 rounded-lg border transition shadow-sm ${
                                                         isDisponible
                                                             ? 'border-slate-200 dark:border-slate-700'
                                                             : 'border-rose-200/80 dark:border-rose-900/50 bg-slate-50/70 dark:bg-slate-800/60'
                                                     }`}
                                                 >
-                                                    <span
-                                                        className={`text-sm font-medium pr-2 truncate ${
-                                                            isDisponible
-                                                                ? 'text-slate-700 dark:text-slate-200'
-                                                                : 'text-slate-400 dark:text-slate-500 line-through'
-                                                        }`}
-                                                    >
-                                                        {elem.nombre}
-                                                    </span>
+                                                    <div className="flex flex-col min-w-0 pr-2">
+                                                        <span
+                                                            className={`text-sm font-medium truncate ${
+                                                                isDisponible
+                                                                    ? 'text-slate-700 dark:text-slate-200'
+                                                                    : 'text-slate-400 dark:text-slate-500 line-through'
+                                                            }`}
+                                                        >
+                                                            {elem.nombre}
+                                                        </span>
+                                                        {isPlatoBase && (
+                                                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                                                                ⭐ Plato independiente (No requiere carne)
+                                                            </span>
+                                                        )}
+                                                    </div>
 
-                                                    <div className="flex items-center gap-3 flex-shrink-0">
+                                                    <div className="flex items-center gap-3 flex-shrink-0 self-end sm:self-auto">
+                                                        {/* Botón para marcar/desmarcar si es plato base */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleTogglePlatoBase(key, elem.id)}
+                                                            title={isPlatoBase ? "Quitar condición de plato independiente" : "Marcar como plato independiente (sin carne)"}
+                                                            className={`px-2 py-1 rounded text-[11px] font-bold transition border ${
+                                                                isPlatoBase
+                                                                    ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700'
+                                                                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-200'
+                                                            }`}
+                                                        >
+                                                            {isPlatoBase ? 'Independiente' : 'Requiere Carne'}
+                                                        </button>
+
+                                                        {/* Checkbox Disponible / Agotado */}
                                                         <label className="flex items-center gap-1.5 cursor-pointer select-none">
                                                             <input
                                                                 type="checkbox"
