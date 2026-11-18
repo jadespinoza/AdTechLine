@@ -276,7 +276,8 @@
                 });
                 if (detalles.length === 0) return alert('Por favor seleccione al menos una opción.');
 
-                const desc = `${activeSubmenuProduct.nombre} (${menuDate}): ${detalles.join(', ')}`;
+                const fechaEtiqueta = menuDiaConfig.fechaMenu || menuDate;
+                const desc = `${activeSubmenuProduct.nombre} (${fechaEtiqueta}): ${detalles.join(', ')}`;
                 setCart([...cart, {
                     id: 'custom-' + Date.now(),
                     productId: activeSubmenuProduct.id,
@@ -493,7 +494,6 @@
                             { id: 'clients', label: 'Clientes & CxC', icon: 'users', roles: ['soporte', 'admin', 'cajero'] },
                             { id: 'suppliers', label: 'Proveedores & CxP', icon: 'truck', roles: ['soporte', 'admin'] },
                             { id: 'compras', label: 'Compras', icon: 'package', roles: ['soporte', 'admin'] },
-                            { id: 'config', label: 'Configuración', icon: 'settings', roles: ['soporte', 'admin'] },
                         ].filter(t => t.roles.includes(currentUser.rol)).map(tab => (
                             <button
                                 key={tab.id}
@@ -536,7 +536,7 @@
                         )}
 
                         {activeTab === 'menudia' && (
-                            <MenuDiaModulo menuDiaConfig={menuDiaConfig} setMenuDiaConfig={setMenuDiaConfig} />
+                            <MenuDiaModulo menuDiaConfig={menuDiaConfig} setMenuDiaConfig={setMenuDiaConfig} negocioConfig={negocioConfig} />
                         )}
 
                         {activeTab === 'inventory' && (
@@ -595,70 +595,118 @@
                     </main>
 
                     {/* MODAL SUBMENÚ EN FACTURACIÓN */}
-                    {showPlatoModal && activeSubmenuProduct && (
-                        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
-                                <div className="flex justify-between items-center border-b pb-3">
-                                    <h3 className="text-lg font-bold">Armar {activeSubmenuProduct.nombre}</h3>
-                                    <button onClick={() => setShowPlatoModal(false)} className="text-slate-400 hover:text-slate-600"><Icon name="x" size={20} /></button>
-                                </div>
+                    {showPlatoModal && activeSubmenuProduct && (() => {
+                        // Calcular todos los submenús desactivados por los ítems actualmente seleccionados en platoConfig
+                        const disabledSubmenuKeys = new Set();
+                        if (menuDiaConfig.submenusDinamicos) {
+                            Object.entries(menuDiaConfig.submenusDinamicos).forEach(([sKey, sObj]) => {
+                                const selectedVal = platoConfig[sKey];
+                                if (selectedVal && sObj.elementos) {
+                                    const foundElem = sObj.elementos.find(el => el.nombre === selectedVal);
+                                    if (foundElem && Array.isArray(foundElem.submenusDesactivados)) {
+                                        foundElem.submenusDesactivados.forEach(dk => disabledSubmenuKeys.add(dk));
+                                    }
+                                }
+                            });
+                        }
 
-                                {(activeSubmenuProduct.precioEditable || activeSubmenuProduct.esPlatoDia) && (
-                                    <div className="bg-sky-50 dark:bg-sky-900/30 p-3 rounded-xl border border-sky-200 dark:border-sky-800 flex items-center justify-between">
-                                        <label className="text-xs font-bold text-sky-800 dark:text-sky-200">
-                                            💲 Precio en Facturación ({negocioConfig.moneda || 'RD$'} con ITBIS):
-                                        </label>
-                                        <input
-                                            type="number"
-                                            value={platoConfig.precio || 0}
-                                            onChange={e => setPlatoConfig({ ...platoConfig, precio: Number(e.target.value) })}
-                                            className="w-28 p-2 bg-white dark:bg-slate-800 border border-sky-300 rounded-lg text-right font-bold text-sky-600 text-sm"
-                                        />
+                        return (
+                            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                                <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl border border-slate-200 dark:border-slate-700">
+                                    <div className="flex justify-between items-center border-b pb-3">
+                                        <div>
+                                            <h3 className="text-lg font-bold">Armar {activeSubmenuProduct.nombre}</h3>
+                                            {menuDiaConfig.fechaMenu && (
+                                                <p className="text-[11px] text-slate-400">Menú del día: {menuDiaConfig.fechaMenu}</p>
+                                            )}
+                                        </div>
+                                        <button onClick={() => setShowPlatoModal(false)} className="text-slate-400 hover:text-slate-600"><Icon name="x" size={20} /></button>
                                     </div>
-                                )}
 
-                                <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
-                                    {menuDiaConfig.submenusDinamicos && Object.entries(menuDiaConfig.submenusDinamicos)
-                                        .filter(([key]) => !activeSubmenuProduct.submenus || activeSubmenuProduct.submenus.length === 0 || activeSubmenuProduct.submenus.includes(key))
-                                        .map(([key, submenu]) => {
-                                            const filteredItems = (submenu.elementos || []).filter(e => {
-                                                if (e.disponible === false) return false;
-                                                if (activeSubmenuProduct.opcionesPermitidas && activeSubmenuProduct.opcionesPermitidas.length > 0) {
-                                                    return activeSubmenuProduct.opcionesPermitidas.includes(e.nombre);
-                                                }
-                                                return true;
-                                            });
-                                            if (filteredItems.length === 0) return null;
-                                            return (
-                                                <div key={key} className="space-y-1">
-                                                    <label className="block text-xs font-bold text-slate-500 uppercase">{submenu.titulo}</label>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        {filteredItems.map(item => (
-                                                            <button
-                                                                key={item.id}
-                                                                type="button"
-                                                                onClick={() => setPlatoConfig({ ...platoConfig, [key]: platoConfig[key] === item.nombre ? '' : item.nombre })}
-                                                                className={`p-2.5 text-xs rounded-lg border font-medium text-left transition ${
-                                                                    platoConfig[key] === item.nombre
-                                                                        ? 'border-sky-500 bg-sky-50 text-sky-600 font-bold dark:bg-sky-900/40 dark:text-sky-300'
-                                                                        : 'border-slate-200 dark:border-slate-700'
-                                                                }`}
-                                                            >
-                                                                {item.nombre}
-                                                            </button>
-                                                        ))}
+                                    {(activeSubmenuProduct.precioEditable || activeSubmenuProduct.esPlatoDia) && (
+                                        <div className="bg-sky-50 dark:bg-sky-900/30 p-3 rounded-xl border border-sky-200 dark:border-sky-800 flex items-center justify-between">
+                                            <label className="text-xs font-bold text-sky-800 dark:text-sky-200">
+                                                💲 Precio en Facturación ({negocioConfig.moneda || 'RD$'} con ITBIS):
+                                            </label>
+                                            <input
+                                                type="number"
+                                                value={platoConfig.precio || 0}
+                                                onChange={e => setPlatoConfig({ ...platoConfig, precio: Number(e.target.value) })}
+                                                className="w-28 p-2 bg-white dark:bg-slate-800 border border-sky-300 rounded-lg text-right font-bold text-sky-600 text-sm"
+                                            />
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
+                                        {menuDiaConfig.submenusDinamicos && Object.entries(menuDiaConfig.submenusDinamicos)
+                                            .filter(([key]) => !activeSubmenuProduct.submenus || activeSubmenuProduct.submenus.length === 0 || activeSubmenuProduct.submenus.includes(key))
+                                            .map(([key, submenu]) => {
+                                                const isSubmenuDisabled = disabledSubmenuKeys.has(key);
+                                                const filteredItems = (submenu.elementos || []).filter(e => {
+                                                    if (e.disponible === false) return false;
+                                                    if (activeSubmenuProduct.opcionesPermitidas && activeSubmenuProduct.opcionesPermitidas.length > 0) {
+                                                        return activeSubmenuProduct.opcionesPermitidas.includes(e.nombre);
+                                                    }
+                                                    return true;
+                                                });
+                                                if (filteredItems.length === 0) return null;
+
+                                                return (
+                                                    <div key={key} className={`space-y-1.5 transition-opacity ${isSubmenuDisabled ? 'opacity-50' : ''}`}>
+                                                        <div className="flex items-center justify-between">
+                                                            <label className="block text-xs font-bold text-slate-500 uppercase">{submenu.titulo}</label>
+                                                            {isSubmenuDisabled && (
+                                                                <span className="text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 px-2 py-0.5 rounded-full">
+                                                                    No aplica para la selección actual
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            {filteredItems.map(item => {
+                                                                const isSelected = !isSubmenuDisabled && platoConfig[key] === item.nombre;
+                                                                return (
+                                                                    <button
+                                                                        key={item.id}
+                                                                        type="button"
+                                                                        disabled={isSubmenuDisabled}
+                                                                        onClick={() => {
+                                                                            const isUnselecting = platoConfig[key] === item.nombre;
+                                                                            const nextVal = isUnselecting ? '' : item.nombre;
+                                                                            const updatedConfig = { ...platoConfig, [key]: nextVal };
+
+                                                                            // Si este ítem desactiva otros submenús, limpiar las selecciones previas de esos submenús
+                                                                            if (!isUnselecting && Array.isArray(item.submenusDesactivados)) {
+                                                                                item.submenusDesactivados.forEach(dk => {
+                                                                                    updatedConfig[dk] = '';
+                                                                                });
+                                                                            }
+                                                                            setPlatoConfig(updatedConfig);
+                                                                        }}
+                                                                        className={`p-2.5 text-xs rounded-lg border font-medium text-left transition ${
+                                                                            isSubmenuDisabled
+                                                                                ? 'border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-400 cursor-not-allowed'
+                                                                                : isSelected
+                                                                                    ? 'border-sky-500 bg-sky-50 text-sky-600 font-bold dark:bg-sky-900/40 dark:text-sky-300'
+                                                                                    : 'border-slate-200 dark:border-slate-700 hover:border-sky-300'
+                                                                        }`}
+                                                                    >
+                                                                        {item.nombre}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            );
-                                        })}
-                                </div>
+                                                );
+                                            })}
+                                    </div>
 
-                                <button onClick={handleAddPlatoDia} className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl transition shadow-lg">
-                                    Agregar al Carrito
-                                </button>
+                                    <button onClick={handleAddPlatoDia} className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-xl transition shadow-lg">
+                                        Agregar al Carrito
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* MODAL TICKET / RECIBO */}
                     {showReceipt && lastInvoice && (
